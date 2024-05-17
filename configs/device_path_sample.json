@@ -1,0 +1,24 @@
+{
+    "raw_dataset_path": "C:\\Path_to_Data\\verbmem_ecnt\\",
+    "dgd_output_path": "C:\\Path_to_Pre_Calcuaated_encoder_model_outputs\\verbmem_ecnt_block\\",
+    "preprocessed_dataset_path": "D:\\Path_to_Preprocessed_data\\",
+    "feature_path": "C:\\Path_to_Features\\verbmem_ecnt_features\\",
+    "model_path": "D:\\Path_to_ModelRepo\\lexical_memory_task_eeg\\",
+    "iEEG_data": "D:\\Navid\\Dataset\\CLEAR\\interim\\",
+    "Pilot_data": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\",
+
+    "raw_dataset_path": "D:\\Navid\\Dataset\\CLEAR\\interim\\",
+    "preprocessed_dataset_path": "D:\\Navid\\Dataset\\CLEAR\\preprocessed\\",
+    "feature_path": "D:\\Navid\\Dataset\\CLEAR\\features\\",
+    "model_path": "D:\\Navid\\Projects2\\lexical_memory_task_eeg\\",
+
+    "raw_dataset_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\",
+    "preprocessed_dataset_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\preprocessed\\",
+    "feature_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\features\\",
+    "model_path": "D:\\Navid\\Projects2\\lexical_memory_task_eeg\\"
+
+
+    "feature_path": "/Users/applepie/Library/CloudStorage/OneDrive-SharedLibraries-WorcesterPolytechnicInstitute(wpi.edu)/Ziaei, Navid - verbmem_ecnt_features",
+    "model_path": "D:\\Path_to_ModelRepo\\lexical_memory_task_eeg\\",
+}
+
