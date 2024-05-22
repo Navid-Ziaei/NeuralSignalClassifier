@@ -4,7 +4,6 @@ import torch
 import xgboost as xgb
 from scipy.stats import pointbiserialr
 from LDGD.model.utils.kernels import ARDRBFKernel
-from LDGD.model.Bayesian_JointGPLVM import *
 from LDGD.model import LDGD, FastLDGD
 from LDGD.visualization import plot_results_gplvm, plot_heatmap
 from gpytorch.likelihoods import GaussianLikelihood, BernoulliLikelihood

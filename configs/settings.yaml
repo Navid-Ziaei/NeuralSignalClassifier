@@ -1,0 +1,67 @@
+# List of patient IDs
+patient:
+  - 'p01'
+
+# Dataset name to use
+dataset: "clear"
+
+# Enable or disable debug mode
+debug_mode: true
+
+
+method_list:
+  - "xgboost"
+# - "ldgd"
+
+metric_list:
+  - "accuracy"
+  - "f1_score"
+  - "precision"
+  - "recall"
+
+#  data
+features_selection_method : "all"  # Options: all, corr, pre_selected
+feature_transformation : "normalize"  # Options: normalize, standardize, None
+target_column : "ColorLev"  # Options: decision, old_new, is_go, is_correct, is_experienced
+
+
+# LDGD Configs
+data_dim : None
+latent_dim : 7
+num_inducing_points : 15
+cls_weight : 1
+use_gpytorch : True
+
+# Training LDGD
+load_trained_model : False
+batch_size : 100
+num_epochs_train : 100
+num_epochs_test : 100
+
+
+# Save features to a file
+save_features: false
+
+# Load a pretrained model
+load_pretrained_model: true
+
+# Number of folds for cross-validation mode (It can be a number of block for pilot1 task)
+cross_validation_mode: 5
+
+# Proportion of the dataset to include in the test split
+test_size: 0.2
+
+# Load features from a file
+load_features: false
+
+# Load epoched data
+load_epoched_data: true
+
+# Save epoched data to a file
+save_epoched_data: false
+
+# Load preprocessed data from a file
+load_preprocessed_data: false
+
+# Save preprocessed data to a file
+save_preprocessed_data: false

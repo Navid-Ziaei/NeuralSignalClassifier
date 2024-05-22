@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import pickle as pkl
 import os
+from pathlib import Path
 
 
 class FeatureExtractor:
@@ -51,7 +52,7 @@ class FeatureExtractor:
         logging.basicConfig(filename=paths.path_result + 'feature_extraction_log.txt', level=logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
-    def extract_features(self, eeg_dataset):
+    def extract_features(self, eeg_dataset, config):
         """
         Extract features from EEG data for all patients in the EEGDataSet.
 
@@ -90,7 +91,7 @@ class FeatureExtractor:
                 logging.info("Successfully Loaded!")
             else:
                 # Extract features for the current patient dataset
-                features = self.apply_feature_extraction(patient_dataset)
+                features = self.apply_feature_extraction(patient_dataset, **config)
 
                 # Store the extracted features
                 self.all_patient_features[patient_id] = features
@@ -100,6 +101,38 @@ class FeatureExtractor:
                 logging.info("Successfully Extracted!")
 
         return eeg_dataset
+
+    def apply_feature_extraction(self, dataset, **kwargs) -> dict:
+        """
+        Apply feature extraction process on the given EEG data.
+
+        Parameters
+        ----------
+        dataset : EEGDataSet
+            An instance of EEGDataSet containing data for feature extraction.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the extracted features.
+        """
+        # Initialize an empty dictionary to store the extracted features
+        features = {}
+
+        for feature_type, params in kwargs.items():
+            if feature_type == 'time_n200':
+                features['time_n200'] = self.extract_time_features(dataset.data, **params)
+            elif feature_type == 'time_p300':
+                features['time_p300'] = self.extract_time_features(dataset.data, **params)
+            elif feature_type == 'time_post_p300':
+                features['time_post_p300'] = self.extract_time_features(dataset.data, **params)
+            elif feature_type.startswith('coherence'):
+                features.update(self.extract_coherence_features(dataset, **params))
+            elif feature_type.startswith('frequency'):
+                features.update(self.extract_frequency_features(dataset, **params))
+            # Add more feature extraction steps as needed
+
+        return features
 
     def get_feature_array(self, eeg_dataset):
         """
@@ -178,40 +211,8 @@ class FeatureExtractor:
         for key in train_labels.keys():
             features_df[key] = labels_array[key]
 
-        features_df.to_csv(self.paths.feature_path + f"feature_{self.settings.dataset}_{self.settings.patient}.csv", index=False)
+        return features_df, features_matrix, labels_array, patients_ids, features_list_name
 
-        return features_matrix, labels_array, patients_ids, features_list_name
-
-    def apply_feature_extraction(self, dataset) -> dict:
-        """
-        Apply feature extraction process on the given EEG data.
-
-        Parameters
-        ----------
-        dataset : EEGDataSet
-            An instance of EEGDataSet containing data for feature extraction.
-
-        Returns
-        -------
-        dict
-            A dictionary containing the extracted features.
-        """
-        # Initialize an empty dictionary to store the extracted features
-        features = {
-            'time_n200': self.extract_time_features(dataset.data, start_time=150, end_time=250),
-            'time_p300': self.extract_time_features(dataset.data, start_time=250, end_time=550),
-            'time_post_p300': self.extract_time_features(dataset.data, start_time=550, end_time=750)
-        }
-
-        # Update the features dictionary with coherence features
-        features.update(self.extract_coherence_features(dataset, time_start=0, end_time=1000))
-
-        # Update the features dictionary with frequency features for two different time windows
-        features.update(self.extract_frequency_features(dataset, time_start=0, end_time=500))
-        features.update(self.extract_frequency_features(dataset, time_start=250, end_time=750))
-        features.update(self.extract_frequency_features(dataset, time_start=500, end_time=1000))
-
-        return features
 
     def extract_time_features(self, data, start_time=150, end_time=250):
         """
@@ -418,6 +419,8 @@ class FeatureExtractor:
         file_path : str
             The file path where the features will be saved.
         """
+
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, 'wb') as f:
             pkl.dump(features, f)
 

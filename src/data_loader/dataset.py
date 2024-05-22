@@ -15,13 +15,11 @@ from scipy.signal import detrend
 from torch.utils.data import Dataset
 
 from src.visualization.visualization_utils import plot_histogram
-import asrpy
-import json
 from ieeg_data_loader.data import iEEGDataLoader
 
 
 class AbstractEEGDataLoader(ABC):
-    def __init__(self, paths, settings):
+    def __init__(self, paths: object, settings):
         """
         Initialize the data loader with paths and settings.
 
@@ -799,10 +797,8 @@ class CLEARDataLoader(AbstractEEGDataLoader):
         logging.basicConfig(filename=paths.path_result + 'data_loading_log.txt', level=logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
-    def load_data(self, patient_ids='all'):
-        task = 'flicker'
-        target_class = 'color'
-        data_loader = iEEGDataLoader(patient=self.settings.patient,
+    def load_data(self, patient_ids='all', task='flicker', target_class='color'):
+        data_loader = iEEGDataLoader(patient=patient_ids,
                                      target_class=target_class,
                                      prepared_dataset_path=self.data_directory,
                                      task=task,

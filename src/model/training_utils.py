@@ -1,61 +1,226 @@
 import numpy as np
-from sklearn.metrics import f1_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, classification_report, accuracy_score, precision_score, recall_score
+import numpy as np
+import torch
+import xgboost as xgb
+import gpytorch
+import json
+from LDGD.model.utils.kernels import ARDRBFKernel
+from LDGD.model import LDGD, FastLDGD
+from gpytorch.likelihoods import GaussianLikelihood, BernoulliLikelihood
+from LDGD import visualization
+from imblearn.over_sampling import SMOTE
 
 
-def leave_one_patient_out_evaluation(model, features_matrix, labels_array, patients_ids):
-    unique_pids = np.unique(patients_ids)
-    f1_scores = []
+def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_method='weighting',
+              selected_features=None):
+    # Create and train the XGBoost model with class weights
 
-    for pid_value in unique_pids:
-        train_mask = (patients_ids != pid_value)
-        test_mask = (patients_ids == pid_value)
-        X_train = features_matrix[train_mask]
-        y_train = labels_array[train_mask]
-        X_test_patient = features_matrix[test_mask]
-        y_test_patient = labels_array[test_mask]
+    if len(np.unique(labels_train)) > 2:
+        model = xgb.XGBClassifier(objective="multi:softmax", num_class=2)
+    else:
+        scale_pos_weight = 1
+        if balance_method == 'smote':
+            smote = SMOTE(random_state=42)
+            data_train, labels_train = smote.fit_resample(data_train, labels_train)
+        elif balance_method == 'weighting':
+            scale_pos_weight = 2 * np.sum(1 - labels_train) / np.sum(labels_train)
 
-        model.fit(X_train, y_train)
-        y_pred_patient = model.predict(X_test_patient)
-        f1_score_patient = f1_score(y_test_patient, y_pred_patient, average='weighted')
-        f1_scores.append(f1_score_patient)
+        model = xgb.XGBClassifier(scale_pos_weight=scale_pos_weight,
+                                  max_depth=6,
+                                  num_parallel_tree=2)
 
-    return f1_scores
+    model.fit(data_train, labels_train)
+    if selected_features is not None:
+        feature_importance = {selected_features[i]: model.feature_importances_[i] for i in
+                              range(len(selected_features))}
+        print("top 10 important features are: ",
+              sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10])
+
+    # Make predictions
+    predictions = model.predict(data_test)
+
+    # Calculate the F1-score
+    f1 = f1_score(labels_test, predictions, average='macro')
+    print(f"F1-score: {f1 * 100:.2f}%")
+
+    report = classification_report(y_true=labels_test, y_pred=predictions)
+    print(report)
+    metrics = {
+        'accuracy': accuracy_score(labels_test, predictions),
+        'precision': precision_score(labels_test, predictions, average='weighted'),
+        'recall': recall_score(labels_test, predictions, average='weighted'),
+        'f1_score': f1_score(labels_test, predictions, average='weighted')
+    }
+
+    with open(paths.path_result + 'xgb_classification_report.txt', "w") as file:
+        file.write(report)
+
+    with open(paths.path_result + 'xgb_classification_result.json', "w") as file:
+        json.dump(metrics, file, indent=2)
+
+    return metrics
 
 
-def patient_based_split_evaluation(model, features_matrix, labels_array, patients_ids, test_size=0.2):
-    f1_scores = []
+def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
+               settings, paths):
+    model_settings = {'data_dim': data_train.shape[-1], 'latent_dim': settings.latent_dim,
+                      'num_inducing_points': settings.num_inducing_points, 'cls_weight': settings.cls_weight,
+                      'reg_weight': 1.0, 'use_gpytorch': settings.use_gpytorch, 'use_shared_kernel': False,
+                      'shared_inducing_points': False, 'early_stop': None, 'load_trained_model': False}
 
-    for _ in range(10):  # Repeat 10 times for stable results
-        X_train, X_test, y_train, y_test, _, patients_ids_test = train_test_split(
-            features_matrix, labels_array, patients_ids, test_size=test_size, random_state=None)
+    batch_shape = torch.Size([model_settings['data_dim']])
 
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        f1_score_patient = f1_score(y_test, y_pred, average='weighted')
-        f1_scores.append(f1_score_patient)
+    likelihood_reg = GaussianLikelihood(batch_shape=batch_shape)
+    likelihood_cls = BernoulliLikelihood()
 
-    return f1_scores
+    data_train = torch.tensor(data_train, dtype=torch.float32)
+    data_test = torch.tensor(data_test, dtype=torch.float32)
+    y_train_onehot = torch.tensor(y_train)
+    y_test_onehot = torch.tensor(y_test)
+
+    if model_settings['use_gpytorch'] is False:
+        kernel_cls = ARDRBFKernel(input_dim=model_settings['latent_dim'])
+        kernel_reg = ARDRBFKernel(input_dim=model_settings['latent_dim'])
+    else:
+        kernel_reg = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=model_settings['latent_dim']))
+        kernel_cls = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=model_settings['latent_dim']))
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = LDGD(torch.tensor(data_train, dtype=torch.float32),
+                 kernel_reg=kernel_reg,
+                 kernel_cls=kernel_cls,
+                 num_classes=y_train_onehot.shape[-1],
+                 latent_dim=model_settings['latent_dim'],
+                 num_inducing_points_reg=model_settings['num_inducing_points'],
+                 num_inducing_points_cls=model_settings['num_inducing_points'],
+                 likelihood_reg=likelihood_reg,
+                 likelihood_cls=likelihood_cls,
+                 use_gpytorch=model_settings['use_gpytorch'],
+                 shared_inducing_points=model_settings['shared_inducing_points'],
+                 cls_weight=model_settings['cls_weight'],
+                 reg_weight=model_settings['reg_weight'],
+                 device=device)
+
+    if settings.load_trained_model is False:
+        losses, *_ = model.train_model(yn=data_train, ys=y_train_onehot,
+                                       epochs=settings.num_epochs_train,
+                                       batch_size=settings.batch_size)
+        model.save_wights(path_save=paths.path_model)
+
+        with open(paths.path_model + 'model_settings.json', 'w') as f:
+            json.dump(model_settings, f, indent=2)
+    else:
+        losses = []
+        model.load_weights(paths.path_model)
+
+    predictions, metrics, *_ = model.evaluate(yn_test=data_test, ys_test=labels_test,
+                                              epochs=settings.num_epochs_test,
+                                              save_path=paths.path_result)
+
+    if model_settings['use_gpytorch'] is False:
+        alpha_reg = model.kernel_reg.alpha.detach().numpy()
+        alpha_cls = model.kernel_cls.alpha.detach().numpy()
+        X = model.x.q_mu.detach().numpy()
+        std = model.x.q_sigma.detach().numpy()
+    else:
+        alpha_reg = 1 / model.kernel_reg.base_kernel.lengthscale.cpu().detach().numpy()
+        alpha_cls = 1 / model.kernel_cls.base_kernel.lengthscale.cpu().detach().numpy()
+        X = model.x.q_mu.detach().cpu().numpy()
+        std = torch.nn.functional.softplus(model.x.q_log_sigma).cpu().detach().numpy()
+
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
+                                     inverse_length_scale=alpha_reg,
+                                     latent_dim=model_settings['latent_dim'],
+                                     save_path=paths.path_result, file_name=f'gplvm_train_reg_result_all',
+                                     show_errorbars=True)
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
+                                     inverse_length_scale=alpha_cls,
+                                     latent_dim=model_settings['latent_dim'],
+                                     save_path=paths.path_result, file_name=f'gplvm_train_cls_result_all',
+                                     show_errorbars=True)
+
+    if model_settings['use_gpytorch'] is False:
+        X_test = model.x_test.q_mu.detach().cpu().numpy()
+        std_test = model.x_test.q_sigma.detach().numpy()
+    else:
+        X_test = model.x_test.q_mu.detach().cpu().numpy()
+        std_test = torch.nn.functional.softplus(model.x_test.q_log_sigma).detach().cpu().numpy()
+
+    visualization.plot_results_gplvm(X_test, std_test, labels=labels_test, losses=losses,
+                                     inverse_length_scale=alpha_cls,
+                                     latent_dim=model_settings['latent_dim'],
+                                     save_path=paths.path_result, file_name=f'gplvm_test_result_all',
+                                     show_errorbars=True)
+
+    """
+    inducing_points = (history_test['z_list_reg'][-1], history_test['z_list_cls'][-1])
+
+    plot_heatmap(X, labels_train, model, alpha_cls, cmap='winter', range_scale=1.2,
+                 file_name='latent_heatmap_train', inducing_points=inducing_points, save_path=paths.path_result[0])
+    plot_heatmap(X_test, labels_test, model, alpha_cls, cmap='winter', range_scale=1.2,
+                 file_name='latent_heatmap_test', inducing_points=inducing_points, save_path=paths.path_result[0])
+    """
+
+    return metrics
 
 
-def individual_patient_evaluation(model, features_matrix, labels_array, patients_ids, train_ratio=0.8):
-    unique_pids = np.unique(patients_ids)
-    f1_scores = []
+def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
+                    settings, paths):
+    model_settings = {'data_dim': data_train.shape[-1], 'latent_dim': settings.latent_dim,
+                      'num_inducing_points': settings.num_inducing_points, 'cls_weight': settings.cls_weight,
+                      'reg_weight': 1.0, 'use_gpytorch': settings.use_gpytorch, 'use_shared_kernel': False,
+                      'shared_inducing_points': False, 'early_stop': None}
+    batch_shape = torch.Size([model_settings['data_dim']])
 
-    for pid_value in unique_pids:
-        mask = (patients_ids == pid_value)
-        X_patient = features_matrix[mask]
-        y_patient = labels_array[mask]
+    likelihood_reg = GaussianLikelihood(batch_shape=batch_shape)
+    likelihood_cls = BernoulliLikelihood()
 
-        num_train_samples = int(len(X_patient) * train_ratio)
-        X_train = X_patient[:num_train_samples]
-        y_train = y_patient[:num_train_samples]
-        X_test_patient = X_patient[num_train_samples:]
-        y_test_patient = y_patient[num_train_samples:]
+    data_train = torch.tensor(data_train, dtype=torch.float32)
+    data_test = torch.tensor(data_test, dtype=torch.float32)
+    y_train_onehot = torch.tensor(y_train)
+    y_test_onehot = torch.tensor(y_test)
 
-        model.fit(X_train, y_train)
-        y_pred_patient = model.predict(X_test_patient)
-        f1_score_patient = f1_score(y_test_patient, y_pred_patient, average='weighted')
-        f1_scores.append(f1_score_patient)
 
-    return f1_scores
+    if model_settings['use_gpytorch'] is False:
+        kernel_cls = ARDRBFKernel(input_dim=model_settings['latent_dim'])
+        kernel_reg = ARDRBFKernel(input_dim=model_settings['latent_dim'])
+    else:
+        kernel_reg = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=model_settings['latent_dim']))
+        kernel_cls = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=model_settings['latent_dim']))
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = FastLDGD(torch.tensor(data_train, dtype=torch.float32),
+                     kernel_reg=kernel_reg,
+                     kernel_cls=kernel_cls,
+                     num_classes=y_train_onehot.shape[-1],
+                     latent_dim=model_settings['latent_dim'],
+                     num_inducing_points_reg=model_settings['num_inducing_points'],
+                     num_inducing_points_cls=model_settings['num_inducing_points'],
+                     likelihood_reg=likelihood_reg,
+                     likelihood_cls=likelihood_cls,
+                     use_gpytorch=model_settings['use_gpytorch'],
+                     shared_inducing_points=model_settings['shared_inducing_points'],
+                     cls_weight=model_settings['cls_weight'],
+                     reg_weight=model_settings['reg_weight'],
+                     device=device)
+
+
+    if settings.load_trained_model is False:
+        losses, *_ = model.train_model(yn=data_train, ys=y_train_onehot,
+                                       epochs=settings.num_epochs_train,
+                                       batch_size=settings.batch_size, yn_test=data_test, ys_test=labels_test)
+        # early_stop=early_stop)
+        model.save_wights(path_save=paths.path_model)
+
+        with open(paths.path_model + 'model_settings.json', 'w') as f:
+            json.dump(model_settings, f, indent=2)
+    else:
+        losses = []
+        model.load_weights(paths.path_model)
+
+    predictions, metrics, *_ = model.evaluate(yn_test=data_test, ys_test=labels_test,
+                                              epochs=settings.num_epochs_test,
+                                              save_path=paths.path_result)
+
+    return metrics

@@ -24,8 +24,15 @@ class Paths:
     def load_device_paths(self):
 
         """ working directory """
-        working_folder = os.path.dirname(os.path.realpath(__file__))
-        working_folder = os.path.dirname(os.path.dirname(working_folder))
+        working_folder = os.path.abspath(__file__)
+        if 'Neural_Signal_Classifier' in working_folder:
+            # Find the index of 'Suspicious_Message_Detection'
+            index = working_folder.find('Neural_Signal_Classifier') + len('Neural_Signal_Classifier')
+            # Extract the path up to 'Suspicious_Message_Detection'
+            working_folder = working_folder[:index]
+        else:
+            print("The path does not contain 'Neural_Signal_Classifier'")
+            working_folder = ''
 
         """ loading device path from the json file """
         try:
@@ -44,40 +51,47 @@ class Paths:
             self.channel_group_file = working_folder + "/configs/channel_groups.mat"
 
     def create_paths(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))  # get the working directory path
-        dir_path = os.path.dirname(os.path.dirname(dir_path))
+        working_folder = os.path.abspath(__file__)
+        if 'Neural_Signal_Classifier' in working_folder:
+            # Find the index of 'Suspicious_Message_Detection'
+            index = working_folder.find('Neural_Signal_Classifier') + len('Neural_Signal_Classifier')
+            # Extract the path up to 'Suspicious_Message_Detection'
+            dir_path = working_folder[:index]
+        else:
+            print("The path does not contain 'Neural_Signal_Classifier'")
+            dir_path = ''
 
-        self.base_path = dir_path + '\\results\\'
+        self.base_path = dir_path + '/results/'
         if self.debug_mode is False:
             self.folder_name = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         else:
             self.folder_name = 'debug'
-        results_base_path = self.base_path + self.folder_name + '\\'
+        results_base_path = self.base_path + self.folder_name + '/'
         """if Path(results_base_path).is_dir():
             shutil.rmtree(results_base_path)"""
 
         Path(results_base_path).mkdir(parents=True, exist_ok=True)
-        Path(results_base_path + 'model\\').mkdir(parents=True, exist_ok=True)
-        self.path_model = os.path.join(results_base_path + 'model\\')
+        Path(results_base_path + 'model/').mkdir(parents=True, exist_ok=True)
+        self.path_model = os.path.join(results_base_path + 'model/')
         self.path_result = os.path.join(results_base_path)
 
     def create_subject_paths(self, subject_name):
-        self.results_base_path = self.base_path + self.folder_name + f'\\{subject_name}\\'
+        self.results_base_path = self.base_path + self.folder_name + f'/{subject_name}/'
         Path(self.results_base_path).mkdir(parents=True, exist_ok=True)
-        Path(self.results_base_path + 'model\\').mkdir(parents=True, exist_ok=True)
-        self.path_model = os.path.join(self.results_base_path + 'model\\')
+        Path(self.results_base_path + 'model/').mkdir(parents=True, exist_ok=True)
+        self.path_model = os.path.join(self.results_base_path + 'model/')
         self.path_result = os.path.join(self.results_base_path)
 
     def create_fold_path(self, fold):
-        self.fold_path = self.results_base_path + f'\\fold{fold}\\'
+        self.fold_path = self.results_base_path + f'/fold{fold}/'
         Path(self.fold_path).mkdir(parents=True, exist_ok=True)
-        Path(self.fold_path + 'model\\').mkdir(parents=True, exist_ok=True)
-        self.path_model = os.path.join(self.fold_path + 'model\\')
+        Path(self.fold_path + 'model/').mkdir(parents=True, exist_ok=True)
+        self.path_model = os.path.join(self.fold_path + 'model/')
         self.path_result = os.path.join(self.fold_path)
 
 
     def create_paths_subject(self, patient_id):
-        self.path_subject_result[patient_id] = self.path_result + patient_id + "\\"
+        self.path_subject_result[patient_id] = self.path_result + patient_id + "/"
         Path(self.path_subject_result[patient_id]).mkdir(parents=True, exist_ok=True)
 
     def update_path(self, time_index):

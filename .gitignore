@@ -8,6 +8,7 @@ data/
 .spyproject/
 device_path.json
 configs/settings.json
+data/
 
 **/__pycache__/
 **/saved_model/

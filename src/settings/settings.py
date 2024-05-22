@@ -1,11 +1,10 @@
-import json
+import yaml
 import os
 import warnings
 
 
 class Settings:
     def __init__(self, patient='all', verbose=True):
-
         self.__supported_feature_transformation = ['normalize', 'standardize']
         self.__supported_datasets = ['verbmem', 'pilot01', 'clear']
 
@@ -28,11 +27,31 @@ class Settings:
         self.__load_preprocessed_data = False
         self.__save_preprocessed_data = False
 
+        self.method_list = ['xgboost', 'ldgd']
+        self.metric_list = ['accuracy', 'f1_score', 'recall', 'precision']
+        self.cross_validation_mode = 5
+        self.target_column = 'ColorLev'
+        self.features_selection_method = 'all'
+        self.feature_transformation = None
+
+        # LDGD configs
+        self.data_dim = None
+        self.latent_dim = 7
+        self.num_inducing_points = 15
+        self.cls_weight = 1
+        self.use_gpytorch = True
+
+        # LDGD training configs
+        self.load_trained_model = False
+        self.batch_size = 100
+        self.num_epochs_train = 100
+        self.num_epochs_test = 100
+
     def load_settings(self):
         """
-        This function loads the json files for settings and network settings from the working directory and
-        creates a Settings object based on the fields in the json file. It also loads the local path of the dataset
-        from device_path.json
+        This function loads the YAML files for settings and network settings from the working directory and
+        creates a Settings object based on the fields in the YAML file. It also loads the local path of the dataset
+        from device_path.yaml
         return:
             settings: a Settings object
             network_settings: a dictionary containing settings of the model
@@ -40,25 +59,32 @@ class Settings:
         """
 
         """ working directory """
-        working_folder = os.path.dirname(os.path.realpath(__file__))
-        parent_folder = os.path.dirname(os.path.dirname(working_folder)) + '/'
+        working_folder = os.path.abspath(__file__)
+        if 'Neural_Signal_Classifier' in working_folder:
+            # Find the index of 'Suspicious_Message_Detection'
+            index = working_folder.find('Neural_Signal_Classifier') + len('Neural_Signal_Classifier')
+            # Extract the path up to 'Suspicious_Message_Detection'
+            parent_folder = working_folder[:index]
+        else:
+            print("The path does not contain 'Neural_Signal_Classifier'")
+            parent_folder = ''
 
-        """ loading settings from the json file """
+        """ loading settings from the YAML file """
         try:
-            with open(parent_folder + "/configs/settings.json", "r") as file:
-                settings_json = json.loads(file.read())
-        except:
-            raise Exception('Could not load settings.json from the working directory!')
+            with open(parent_folder + "/configs/settings.yaml", "r") as file:
+                settings_yaml = yaml.safe_load(file)
+        except Exception as e:
+            raise Exception('Could not load settings.yaml from the working directory!') from e
 
         """ creating settings """
-        if "patient" not in settings_json.keys():
-            raise Exception('"patient" was not found in settings.json!')
-        if "dataset" not in settings_json.keys():
-            raise Exception('"dataset" was not found in settings.json!')
+        if "patient" not in settings_yaml.keys():
+            raise Exception('"patient" was not found in settings.yaml!')
+        if "dataset" not in settings_yaml.keys():
+            raise Exception('"dataset" was not found in settings.yaml!')
 
-        self.patient = settings_json["patient"]
+        self.patient = settings_yaml["patient"]
 
-        for key, value in settings_json.items():
+        for key, value in settings_yaml.items():
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
@@ -116,7 +142,7 @@ class Settings:
 
     @dataset.setter
     def dataset(self, dataset_nam):
-        if isinstance(dataset_nam, str) and dataset_nam in self.__supported_datasets:
+        if isinstance(dataset_nam, str) and dataset_nam.lower() in self.__supported_datasets:
             self.__dataset = dataset_nam
         else:
             raise ValueError(f"The dataset should be selected from {self.__supported_datasets}")
@@ -211,4 +237,4 @@ class Settings:
         if isinstance(value, bool):
             self.__debug_mode = value
         else:
-            raise ValueError("The v should be boolean")
+            raise ValueError("The debug_mode should be boolean")

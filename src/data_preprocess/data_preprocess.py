@@ -36,7 +36,7 @@ class DataPreprocessor:
         self.paths = paths
         self.settings = settings
 
-    def preprocess(self, eeg_dataset):
+    def preprocess(self, eeg_dataset, preprocessing_configs):
         """
         Preprocess all patient data in the EEGDataSet.
 
@@ -47,11 +47,15 @@ class DataPreprocessor:
         ----------
         eeg_dataset : EEGDataSet
             The EEGDataSet instance containing patient data.
+        preprocessing_configs : dict
+            A dictionary containing preprocessing steps and their parameters.
 
         Returns
         -------
         EEGDataSet
             The EEGDataSet instance with preprocessed data.
+
+
         """
         "=================== Preprocess Data =================="
         for patient_id, data in eeg_dataset.all_patient_data.items():
@@ -69,7 +73,7 @@ class DataPreprocessor:
                 with open(preprocessed_data_path, 'rb') as file:
                     preprocessed_dataset = pickle.load(file)
             else:
-                preprocessed_dataset = self.apply_preprocessing(patient_dataset.data)
+                preprocessed_dataset = self.apply_preprocessing(patient_dataset.data, **preprocessing_configs)
                 if self.settings.save_preprocessed_data is True:
                     with open(preprocessed_data_path, 'wb') as file:
                         pickle.dump(preprocessed_dataset, file)
@@ -78,30 +82,33 @@ class DataPreprocessor:
 
         return eeg_dataset
 
-    def apply_preprocessing(self, data: np.ndarray) -> np.ndarray:
+    def apply_preprocessing(self, data: np.ndarray, **kwargs) -> np.ndarray:
         """
-        Apply a series of preprocessing steps to the EEG data.
-
-        This method can include baseline removal and other preprocessing steps
-        defined in separate methods.
+        Apply a series of preprocessing steps to the EEG data based on provided keyword arguments.
 
         Parameters
         ----------
         data : numpy.ndarray
             The EEG data to be preprocessed.
+        kwargs : dict
+            A dictionary containing preprocessing steps and their parameters.
 
         Returns
         -------
         numpy.ndarray
             Preprocessed EEG data.
         """
-        data = self.remove_baseline(data, normalize=False, baseline_t_min=-1000)
-        data = self.low_pass_filter(data, cutoff=45, order=5)
+        for step, params in kwargs.items():
+            if step == 'remove_baseline':
+                data = self.remove_baseline(data, **params)
+            elif step == 'low_pass_filter':
+                data = self.low_pass_filter(data, **params)
+            elif step == 'detrend_eeg':
+                data = self.detrend_eeg(data, **params)
+            elif step == 'common_average_referencing':
+                data = self.common_average_referencing(data, **params)
+            # Add more preprocessing steps as needed
 
-
-        # data = self.detrend_eeg(data)
-        # data = self.common_average_referencing(data)
-        # Additional preprocessing steps can be added here
         return data
 
     def remove_baseline(self, data, baseline_t_min=-300, baseline_t_max=0, normalize=True):
