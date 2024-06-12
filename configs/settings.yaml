@@ -1,6 +1,14 @@
 # List of patient IDs
 patient:
   - 'p01'
+  - 'p02'
+  - 'p03'
+  - 'p04'
+  - 'p05'
+  - 'p06'
+  - 'p07'
+  - 'p08'
+  - 'p13'
 
 # Dataset name to use
 dataset: "clear"
@@ -11,7 +19,8 @@ debug_mode: true
 
 method_list:
   - "xgboost"
-# - "ldgd"
+  - "fast_ldgd"
+  - "ldgd"
 
 metric_list:
   - "accuracy"
@@ -27,16 +36,17 @@ target_column : "ColorLev"  # Options: decision, old_new, is_go, is_correct, is_
 
 # LDGD Configs
 data_dim : None
-latent_dim : 7
-num_inducing_points : 15
+latent_dim : 3
+num_inducing_points : 10
 cls_weight : 1
 use_gpytorch : True
+shared_inducing_points : True
 
 # Training LDGD
 load_trained_model : False
 batch_size : 100
-num_epochs_train : 100
-num_epochs_test : 100
+num_epochs_train : 5000
+num_epochs_test : 5000
 
 
 # Save features to a file

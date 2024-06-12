@@ -234,8 +234,8 @@ class ResultList():
         self.result_list['filename'].append(patients_files.split('_')[0])
 
     def update_result(self, method, metric, avg_score, std_score):
-        self.result_list[method + ' avg_' + metric] = avg_score
-        self.result_list[method + ' std_' + metric] = std_score
+        self.result_list[method + ' avg_' + metric].append(avg_score)
+        self.result_list[method + ' std_' + metric].append(std_score)
 
     def to_dataframe(self):
         return pd.DataFrame(self.result_list)

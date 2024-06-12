@@ -40,6 +40,7 @@ class Settings:
         self.num_inducing_points = 15
         self.cls_weight = 1
         self.use_gpytorch = True
+        self.shared_inducing_points = True
 
         # LDGD training configs
         self.load_trained_model = False

@@ -2,16 +2,10 @@ from src.settings import Paths, Settings
 from src.data_loader import VerbMemEEGDataLoader, PilotEEGDataLoader, CLEARDataLoader
 from src.feature_extraction import FeatureExtractor
 from src.data_preprocess import DataPreprocessor
-from src.visualization.model_result_visualizer import *
-from src.model.Bayesian_JointGPLVM import *
-from src.model.utils.kernels import ARDRBFKernel
 from src.utils import *
 from src.model.training_utils import *
-from gpytorch.likelihoods import GaussianLikelihood, BernoulliLikelihood
 import numpy as np
-import xgboost as xgb
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import f1_score
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -25,75 +19,76 @@ paths.load_device_paths()  # Load device-specific paths
 paths.create_paths()  # Create any necessary file paths
 
 # Check if features are available
-if os.path.exists(paths.feature_path + f"feature_{settings.dataset}_{settings.patient}.csv"):
-    features_raw_df = pd.read_csv(paths.feature_path + f"feature_{settings.dataset}_{settings.patient}.csv")
-else:
-    # Load EEG dataset using configured settings and paths
-    if settings.dataset == 'pilot01':
-        dataset = PilotEEGDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
-    elif settings.dataset == 'verbmem':
-        dataset = VerbMemEEGDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
-    elif settings.dataset == 'clear':
-        dataset = CLEARDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
-    else:
-        raise ValueError("dataset in model_settings should be verbmem or pilot01 or clear")
+features_raw_df_list = []
+if isinstance(settings.patient, list):
+    for patient in settings.patient:
+        if os.path.exists(paths.feature_path + f"feature_{settings.dataset}_{patient}.csv"):
+            features_raw_df = pd.read_csv(paths.feature_path + f"feature_{settings.dataset}_{patient}.csv")
+        else:
+            # Load EEG dataset using configured settings and paths
+            if settings.dataset == 'pilot01':
+                dataset = PilotEEGDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
+            elif settings.dataset == 'verbmem':
+                dataset = VerbMemEEGDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
+            elif settings.dataset == 'clear':
+                dataset = CLEARDataLoader(paths=paths, settings=settings)  # Initialize EEG dataset loader
+            else:
+                raise ValueError("dataset in model_settings should be verbmem or pilot01 or clear")
 
-    dataset.load_data(patient_ids=settings.patient)  # Load EEG data for specified patients
+            dataset.load_data(patient_ids=patient)  # Load EEG data for specified patients
 
-    # Preprocess the loaded dataset
-    preprocessing_configs = {
-        'remove_baseline': {'normalize': False, 'baseline_t_min': -1000},
-        'low_pass_filter': {'cutoff': 45, 'order': 5}
-    }
-    data_preprocessor = DataPreprocessor(paths=paths, settings=settings)  # Initialize data preprocessor
-    dataset = data_preprocessor.preprocess(dataset, preprocessing_configs)  # Apply preprocessing steps to the dataset
+            # Preprocess the loaded dataset
+            preprocessing_configs = {
+                'remove_baseline': {'normalize': False, 'baseline_t_min': -1000},
+                'low_pass_filter': {'cutoff': 45, 'order': 5}
+            }
+            data_preprocessor = DataPreprocessor(paths=paths, settings=settings)  # Initialize data preprocessor
+            dataset = data_preprocessor.preprocess(dataset, preprocessing_configs)  # Apply preprocessing steps to the dataset
 
-    """
-    for idx in range(len(list(dataset.all_patient_data.keys()))):
-        single_patient_data = dataset.all_patient_data[list(dataset.all_patient_data.keys())[idx]]
-        visualize_erp(patient_data=single_patient_data, channel_idx=45,
-                      label=single_patient_data.labels['is_experienced'], label_names=['Not Experienced', 'Experienced'])
-        visualize_erp(patient_data=single_patient_data, channel_idx=45,
-                      label=single_patient_data.labels['go_nogo'], label_names=['NoGo', 'Go'])
-    """
+            """
+            for idx in range(len(list(dataset.all_patient_data.keys()))):
+                single_patient_data = dataset.all_patient_data[list(dataset.all_patient_data.keys())[idx]]
+                visualize_erp(patient_data=single_patient_data, channel_idx=45,
+                              label=single_patient_data.labels['is_experienced'], label_names=['Not Experienced', 'Experienced'])
+                visualize_erp(patient_data=single_patient_data, channel_idx=45,
+                              label=single_patient_data.labels['go_nogo'], label_names=['NoGo', 'Go'])
+            """
 
-    # Extract features from the preprocessed dataset
-    feature_extraction_configs = {
-        'time_n200': {'start_time': 150, 'end_time': 250},
-        'time_p300': {'start_time': 250, 'end_time': 550},
-        'time_post_p300': {'start_time': 550, 'end_time': 750},
-        'frequency1': {'time_start': 0, 'end_time': 500},
-        'frequency2': {'time_start': 250, 'end_time': 700}
-    }
-    feature_extractor = FeatureExtractor(paths=paths, settings=settings)  # Initialize feature extractor
-    feature_extractor.extract_features(dataset,
-                                       feature_extraction_configs)  # Extract relevant features from the dataset
-    features_raw_df, *_ = feature_extractor.get_feature_array(dataset)
-    features_raw_df.to_csv(paths.feature_path + f"feature_{settings.dataset}_{settings.patient}.csv", index=False)
-
+            # Extract features from the preprocessed dataset
+            feature_extraction_configs = {
+                'time_n200': {'start_time': 150, 'end_time': 250},
+                'time_p300': {'start_time': 250, 'end_time': 550},
+                'time_post_p300': {'start_time': 550, 'end_time': 750},
+                'frequency1': {'time_start': 0, 'end_time': 500},
+                'frequency2': {'time_start': 250, 'end_time': 700}
+            }
+            feature_extractor = FeatureExtractor(paths=paths, settings=settings)  # Initialize feature extractor
+            feature_extractor.extract_features(dataset,
+                                               feature_extraction_configs)  # Extract relevant features from the dataset
+            features_raw_df, *_ = feature_extractor.get_feature_array(dataset)
+            features_raw_df.to_csv(paths.feature_path + f"feature_{settings.dataset}_{patient}.csv", index=False)
+        features_raw_df_list.append(features_raw_df)
 # Get the features matrix and labels from the raw features DataFrame
 drop_columns = get_drop_colums(settings)
 results_logger = ResultList(method_list=settings.method_list, metric_list=settings.metric_list)
 
 # Define the KFold cross-validator
 if isinstance(settings.cross_validation_mode, int):
-    kf = KFold(n_splits=settings.cross_validation_mode, shuffle=True, random_state=42)
+    kf = StratifiedKFold(n_splits=settings.cross_validation_mode, shuffle=True, random_state=42)
+
 elif isinstance(settings.cross_validation_mode, str) and settings.cross_validation_mode == 'block':
     kf = None
 else:
     raise ValueError("cross_validation_mode should be number of folds or be 'block' for block based")
 
-patients = list(np.unique(features_raw_df['id']))
 
 certain = []
-for patient_id in patients:
-    print(f"============ Subject {patient_id} from {len(patients)} ============ \n")
+for patient_id, features_raw_df in enumerate(features_raw_df_list):
+    print(f"============ Subject {patient_id} ({settings.patient[patient_id]}) from {len(features_raw_df_list)} ============ \n")
     # select patient
     # select patient
     columns_to_remove = [col for col in features_raw_df.columns if "EX" in col]
-    features_raw_df = features_raw_df.drop(columns=columns_to_remove)
-    features_df = features_raw_df[features_raw_df['id'] == patient_id]
-    # features_df = features_raw_df
+    features_df = features_raw_df.drop(columns=columns_to_remove)
 
     # select labels
     y_one_hot, labels_array, unique_pids, patients_files, features_df = get_labels(features_df, settings)
@@ -117,7 +112,7 @@ for patient_id in patients:
                        block_nums]
 
     else:
-        folds = kf.split(features_df)
+        folds = kf.split(features_df, labels_array)
 
     for fold_idx, (train_index, test_index) in enumerate(folds):
         paths.create_fold_path(fold_idx)
@@ -137,7 +132,6 @@ for patient_id in patients:
             if method.lower() == 'xgboost':
                 results = train_xgb(data_train, labels_train, data_test, labels_test, paths)
             elif method.lower() == 'ldgd':
-
                 results = train_ldgd(data_train, labels_train, data_test, labels_test,
                                      y_train, y_test,
                                      settings, paths)
@@ -159,8 +153,6 @@ for patient_id in patients:
             std_score = np.std([result[metric] for result in fold_results[method]])
             results_logger.update_result(method, metric, avg_score, std_score)
             print(f"Method {method}: {metric}: {avg_score} +- {std_score}")
-
-
 
 result_df = results_logger.to_dataframe()
 result_df.to_csv(paths.base_path + paths.folder_name + '\\results.csv')
