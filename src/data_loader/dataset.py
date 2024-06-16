@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 from src.visualization.visualization_utils import plot_histogram
 from ieeg_data_loader.data import iEEGDataLoader
-
+import h5py
 
 class AbstractEEGDataLoader(ABC):
     def __init__(self, paths: object, settings):
@@ -102,11 +102,11 @@ class PilotEEGDataLoader(AbstractEEGDataLoader):
         if isinstance(patient_ids, str) and patient_ids == 'all':
             xdf_file_list = [file for file in file_list if file.endswith(".xdf")]
         else:
-            if isinstance(patient_ids, str):
+            if isinstance(patient_ids, list) is False:
                 patient_ids = [patient_ids]
             xdf_file_list = []
             for patient in patient_ids:
-                xdf_file_list.extend([f for f in os.listdir(self.data_directory) if f.endswith(".xdf")
+                xdf_file_list.extend([f for f in os.listdir(self.data_directory) if f.endswith(".xdf") or f.endswith(".h5")
                                       and f.startswith(str(patient))])
 
             if len(file_list) == 0:
@@ -117,16 +117,18 @@ class PilotEEGDataLoader(AbstractEEGDataLoader):
             logging.info(f"Subject {index} from {len(file_list)}: {file_name.split('.')[0]} Load Data ...")
             # If specific patient IDs are provided, skip files not matching those IDs
 
-            # streams, fileheader = pyxdf.load_xdf(file_paths)
-            prepaired_data_path = self.paths.raw_dataset_path + file_name.split('.')[0] + "_trials.pkl"
-            if os.path.exists(prepaired_data_path) and self.settings.load_epoched_data is True:
-                with open(prepaired_data_path, 'rb') as file:
-                    dataset = pickle.load(file)
-            else:
-                dataset = self.load_single_patient_data(file_name)
-                if self.settings.save_epoched_data is True:
-                    dataset.save_to_pickle(
-                        file_path=self.paths.raw_dataset_path + file_name.split('.')[0] + "_trials.pkl")
+            # Attempt to load HD5 file if available
+            dataset = self.load_hd5_file(file_name)
+            if dataset is None:
+                prepaired_data_path = self.paths.raw_dataset_path + file_name.split('.')[0] + "_trials.pkl"
+                if os.path.exists(prepaired_data_path) and self.settings.load_epoched_data is True:
+                    with open(prepaired_data_path, 'rb') as file:
+                        dataset = pickle.load(file)
+                else:
+                    dataset = self.load_single_patient_data(file_name)
+                    if self.settings.save_epoched_data is True:
+                        dataset.save_to_pickle(
+                            file_path=self.paths.raw_dataset_path + file_name.split('.')[0] + "_trials.pkl")
             self.all_patient_data[file_name.split('.')[0]] = dataset
 
     def load_single_patient_data(self, data, dgd_outputs=None, preprocess_continuous_data=False):
@@ -248,6 +250,83 @@ class PilotEEGDataLoader(AbstractEEGDataLoader):
         dataset.bad_channels = bad_channels
 
         return dataset
+
+    def decode_marker(self, marker):
+        parts = marker.decode('utf-8').split('-')
+        if len(parts) != 4:
+            raise ValueError(f"Unexpected marker format: {marker}")
+        return parts[0], parts[1], parts[2], parts[3]
+    def load_hd5_file(self, patient_id):
+        """
+        Load HD5 file if available.
+
+        Parameters
+        ----------
+        patient_id : str
+            The ID of the patient whose HD5 data is to be loaded.
+
+        Returns
+        -------
+        EEGDataSet or None
+            The loaded EEG dataset or None if the HD5 file is not found.
+        """
+        hd5_file_path = os.path.join(self.data_directory, f"{patient_id}")
+        if os.path.exists(hd5_file_path):
+            print(f"Loading H5 file for patient {patient_id}")
+            file = h5py.File(hd5_file_path, 'r')
+
+            # Explore the structure of the file
+            print("Keys: %s" % file.keys())
+            eeg_data = np.squeeze(file['chunks']['eeg']['block']['data'])
+            eeg_data = np.transpose(eeg_data, (0, 2, 1))
+
+            eeg_times = np.squeeze(file['chunks']['eeg']['block']['axes']['axis1']['times'])
+
+            # Access and decode channel names
+            channel_names_raw = file['chunks']['eeg']['block']['axes']['axis2']['names']
+            channel_names = [name.decode('utf-8') for name in channel_names_raw]
+
+            # Print shapes and types to verify
+            print(f"EEG data shape: {eeg_data.shape}")
+            print(f"EEG times shape: {eeg_times.shape}")
+            print(f"Number of channels: {len(channel_names)}")
+
+            labels_data = np.array(file['chunks']['eeg']['block']['axes']['axis0']['data'])
+            # Function to decode the first element
+
+
+            processed_data = []
+            for entry in labels_data:
+                wrd_img, exp_noexp, go_nogo, correct = self.decode_marker(entry['Marker'])
+                target_value = entry['TargetValue']
+                is_correct = entry['IsGood']
+                trial_index = entry['TrialIndex']
+                target_trial_index_asc = entry['TargetTrialIndexAsc']
+                processed_data.append(
+                    (go_nogo, exp_noexp, wrd_img, target_value, is_correct, trial_index, target_trial_index_asc))
+
+            # Creating DataFrame
+            df_target = pd.DataFrame(processed_data,
+                              columns=['go_nogo', 'is_experienced', 'Wrd_Img', 'TargetValue', 'is_correct', 'TrialIndex',
+                                       'target_trial_index_asc'])
+
+            dataset = EEGDataSet()
+            dataset.data = eeg_data
+            dataset.response_time = np.squeeze(eeg_times)
+            dataset.labels = df_target  # Assuming labels need to be processed
+            dataset.trial_index = []  # Assuming trial index needs to be processed
+            dataset.fs = int(1/(eeg_times[1]-eeg_times[0]))
+            dataset.time_ms = np.squeeze(np.round(eeg_times * 1000))
+            dataset.channel_names = channel_names
+            dataset.file_name = f"{patient_id}.hd5"
+            dataset.stream_id = patient_id.split('.')[0]
+            dataset.channel_group = self.channel_groups
+            dataset.bad_channels = []  # Assuming bad channels need to be processed
+
+            return dataset
+        else:
+            print(f"No HD5 file found for patient {patient_id}")
+            return None
 
     def _reformat_marker_file(self, marker_path, file_name, subject_group, load_reformatted_data=True):
         if load_reformatted_data is True:

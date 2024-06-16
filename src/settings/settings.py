@@ -48,6 +48,8 @@ class Settings:
         self.num_epochs_train = 100
         self.num_epochs_test = 100
 
+        self.binary_column = 'h5'
+
     def load_settings(self):
         """
         This function loads the YAML files for settings and network settings from the working directory and

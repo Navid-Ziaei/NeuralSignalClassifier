@@ -213,7 +213,6 @@ class FeatureExtractor:
 
         return features_df, features_matrix, labels_array, patients_ids, features_list_name
 
-
     def extract_time_features(self, data, start_time=150, end_time=250):
         """
         Extract time-domain features from EEG data within a specified time window.

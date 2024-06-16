@@ -1,17 +1,19 @@
 # List of patient IDs
 patient:
-  - 'p01'
-  - 'p02'
-  - 'p03'
-  - 'p04'
-  - 'p05'
-  - 'p06'
-  - 'p07'
-  - 'p08'
-  - 'p13'
+  - 101
 
-# Dataset name to use
-dataset: "clear"
+#  - 'p01'
+#  - 'p02'
+#  - 'p03'
+#  - 'p04'
+#  - 'p05'
+#  - 'p06'
+#  - 'p07'
+#  - 'p08'
+#  - 'p13'
+
+# Dataset name to use ()
+dataset: "pilot01"
 
 # Enable or disable debug mode
 debug_mode: true

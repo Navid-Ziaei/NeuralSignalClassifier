@@ -5,6 +5,7 @@ from scipy.stats import pointbiserialr
 import numpy as np
 import pandas as pd
 
+
 def get_drop_colums(settings):
     if settings.dataset.lower() == 'verbmem':
         drop_columns = ['id', 'old_new', 'decision', 'subject_file']
@@ -12,6 +13,8 @@ def get_drop_colums(settings):
         drop_columns = ['id', 'subject_file', 'block_number', 'block_type', 'stim_indicator', 'go_nogo',
                         'is_experienced',
                         'is_resp', 'is_correct', 'stim']
+        drop_columns = ['go_nogo', 'is_experienced', 'Wrd_Img', 'TargetValue', 'is_correct', 'TrialIndex',
+                        'target_trial_index_asc']
     elif settings.dataset.lower() == 'clear':
         drop_columns = ['id', 'subject_file', 'ColorLev']
     else:
@@ -20,16 +23,15 @@ def get_drop_colums(settings):
     return drop_columns
 
 
-
 def get_labels_pilot1(features_df, model_settings):
-    if model_settings['binary_column'] == 'old_new':
+    if model_settings.binary_column == 'old_new':
         labels_array = features_df['old_new'].values
-    elif model_settings['binary_column'] == 'decision':
+    elif model_settings.binary_column == 'decision':
         if len(np.unique(features_df['decision'].values)) > 2:
             labels_array = features_df['decision'].values * 2
         else:
             labels_array = features_df['decision'].values
-    elif model_settings['binary_column'] == 'is_experienced':
+    elif model_settings.binary_column == 'is_experienced':
         mapping = {'ctrl': 2, 'exp': 1, 'noexp': 0}
 
         data = {
@@ -89,7 +91,7 @@ def get_labels_pilot1(features_df, model_settings):
         # features_df['exp_label'] = features_df['exp_label'].map(mapping)
 
         labels_array = features_df['is_experienced'].values
-    elif model_settings['binary_column'] == 'go_nogo':
+    elif model_settings.binary_column == 'go_nogo':
         mapping = {'go': 1, 'nogo': 0}
 
         # Apply the mapping to the DataFrame column
@@ -98,17 +100,23 @@ def get_labels_pilot1(features_df, model_settings):
         features_df['exp_label'] = features_df['go_nogo'].map(mapping)
 
         labels_array = features_df['is_experienced'].values
+    elif model_settings.binary_column == 'h5':
+        labels_array = features_df['TargetValue'].values
     else:
         labels_array = features_df[model_settings['binary_column']].values
     return features_df, labels_array
+
 
 def get_labels_verbmem(features_df, settings):
     labels_array = features_df[settings.binary_column].values
     return labels_array
 
+
 def get_labels_clear(features_df, settings):
     labels_array = features_df[settings.target_column].values
     return labels_array
+
+
 def get_labels(features_df, settings):
     patients_ids = features_df['id'].values
     patients_files = features_df['subject_file'].values[0]
@@ -122,7 +130,6 @@ def get_labels(features_df, settings):
     else:
         raise ValueError("dataset in model_settings should be verbmem or pilot01 or clear")
 
-
     # ###################### Train test split  ######################
     y_one_hot = np.zeros((labels_array.size, 2))
     y_one_hot[np.arange(labels_array.size), labels_array.astype(int)] = 1
@@ -130,6 +137,8 @@ def get_labels(features_df, settings):
     unique_pids = np.unique(patients_ids)
 
     return y_one_hot, labels_array, unique_pids, patients_files, features_df
+
+
 def get_correlation(features_df, binary_column, paths):
     correlations = {}
     for column in features_df.columns:
@@ -157,6 +166,7 @@ def get_correlation(features_df, binary_column, paths):
     corr_df.to_csv(paths.path_result + 'features.csv')
 
     return selected_features
+
 
 def get_selected_features(features_df, settings, paths, fold_idx, train_index,
                           pre_selected_features=None,
@@ -199,7 +209,8 @@ def get_selected_features(features_df, settings, paths, fold_idx, train_index,
     selected_features = [feature for feature in selected_features if
                          feature not in target_columns_drop]
 
-    print(f"Feature selection mode: {settings.features_selection_method.lower()}, Number of features {len(selected_features)}")
+    print(
+        f"Feature selection mode: {settings.features_selection_method.lower()}, Number of features {len(selected_features)}")
 
     # data transormation : "Normalization", "standardize", None
     if settings.feature_transformation is not None:
@@ -213,6 +224,8 @@ def get_selected_features(features_df, settings, paths, fold_idx, train_index,
     features_matrix = features_df[selected_features].values
 
     return features_matrix, selected_features, patients_ids, patients_files
+
+
 class ResultList():
     def __init__(self, metric_list, method_list):
         self.result_list = {
@@ -239,4 +252,3 @@ class ResultList():
 
     def to_dataframe(self):
         return pd.DataFrame(self.result_list)
-
