@@ -14,7 +14,7 @@ def get_drop_colums(settings):
                         'is_experienced',
                         'is_resp', 'is_correct', 'stim']
         drop_columns = ['go_nogo', 'is_experienced', 'Wrd_Img', 'TargetValue', 'is_correct', 'TrialIndex',
-                        'target_trial_index_asc']
+                        'target_trial_index_asc','id', 'subject_file']
     elif settings.dataset.lower() == 'clear':
         drop_columns = ['id', 'subject_file', 'ColorLev']
     else:

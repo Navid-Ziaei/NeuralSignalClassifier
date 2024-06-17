@@ -1,6 +1,6 @@
 # List of patient IDs
 patient:
-  - 101
+  - '104'
 
 #  - 'p01'
 #  - 'p02'
@@ -21,8 +21,8 @@ debug_mode: true
 
 method_list:
   - "xgboost"
-  - "fast_ldgd"
-  - "ldgd"
+#  - "fast_ldgd"
+#  - "ldgd"
 
 metric_list:
   - "accuracy"

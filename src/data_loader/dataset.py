@@ -100,7 +100,7 @@ class PilotEEGDataLoader(AbstractEEGDataLoader):
         """
         file_list = os.listdir(self.data_directory)
         if isinstance(patient_ids, str) and patient_ids == 'all':
-            xdf_file_list = [file for file in file_list if file.endswith(".xdf")]
+            xdf_file_list = [file for file in file_list if file.endswith(".xdf") or file.endswith(".h5")]
         else:
             if isinstance(patient_ids, list) is False:
                 patient_ids = [patient_ids]
