@@ -1,6 +1,21 @@
 # List of patient IDs
 patient:
+  - '101'
+  - '103'
   - '104'
+  - '106'
+  - '107'
+  - '110'
+  - '111'
+  - '112'
+  - '113'
+  - '114'
+  - '115'
+  - '116'
+  - '201'
+  - '203'
+  - '204'
+  - '205'
 
 #  - 'p01'
 #  - 'p02'
@@ -12,17 +27,17 @@ patient:
 #  - 'p08'
 #  - 'p13'
 
-# Dataset name to use ()
+# Dataset name to use : "pilot01" "clear"
 dataset: "pilot01"
 
 # Enable or disable debug mode
-debug_mode: true
+debug_mode: false
 
 
 method_list:
   - "xgboost"
-#  - "fast_ldgd"
-#  - "ldgd"
+  - "fast_ldgd"
+  - "ldgd"
 
 metric_list:
   - "accuracy"
@@ -31,9 +46,12 @@ metric_list:
   - "recall"
 
 #  data
-features_selection_method : "all"  # Options: all, corr, pre_selected
+features_selection_method : "corr"  # Options: all, corr, pre_selected
 feature_transformation : "normalize"  # Options: normalize, standardize, None
-target_column : "ColorLev"  # Options: decision, old_new, is_go, is_correct, is_experienced
+# for clear dtaset: ColorLev
+# for pilot01 dataset (preprocessed h5 files): TargetValue
+# for pilot01 dataset (raw xdf files): decision, old_new, is_go, is_correct, is_experienced
+target_column : "TargetValue"
 
 
 # LDGD Configs
@@ -58,7 +76,7 @@ save_features: false
 load_pretrained_model: true
 
 # Number of folds for cross-validation mode (It can be a number of block for pilot1 task)
-cross_validation_mode: 5
+cross_validation_mode: 'order'
 
 # Proportion of the dataset to include in the test split
 test_size: 0.2

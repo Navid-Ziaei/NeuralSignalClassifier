@@ -114,8 +114,11 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     if settings.load_trained_model is False:
         losses, loss_dict, history_train = model.train_model(yn=data_train, ys=y_train_onehot,
                                                              epochs=settings.num_epochs_train,
-                                                             batch_size=settings.batch_size)
-        model.save_wights(path_save=paths.path_model)
+                                                             batch_size=settings.batch_size,
+                                                             save_best_result=True,
+                                                             path_save=paths.path_model)
+        model.load_weights(paths.path_model)
+        # model.save_wights(path_save=paths.path_model)
 
         num_figures = len(loss_dict)
 
@@ -127,6 +130,8 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
             axs[i].set_xlabel('Epoch')
             axs[i].set_ylabel(key)
         plt.tight_layout()
+        plt.savefig(paths.path_result + 'losses.png')
+        plt.savefig(paths.path_result + 'losses.svg')
         plt.show()
 
         with open(paths.path_model + 'model_settings.json', 'w') as f:
@@ -183,7 +188,6 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
                                device=device,
                                heat_map_mode='std', show_legend=False)
 
-
     visualization.animate_train(point_history=history_train['x_mu_list'],
                                 labels=labels_train,
                                 file_name='train_animation_with_inducing',
@@ -197,7 +201,6 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
                                 save_path=paths.path_result,
                                 inverse_length_scale=alpha_cls,
                                 inducing_points_history=(history_test['z_list_reg'], history_test['z_list_cls']))
-
 
     visualization.plot_results_gplvm(X_test, std_test, labels=labels_test, losses=losses,
                                      inverse_length_scale=alpha_cls,
@@ -218,12 +221,11 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
 
 
 def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
-                    settings, paths):
-    model_settings = {'data_dim': data_train.shape[-1], 'latent_dim': settings.latent_dim,
+                    settings, paths, use_validation=True):
+    model_settings = {'data_dim': data_train.shape[-1], 'latent_dim': 10,
                       'num_inducing_points': settings.num_inducing_points, 'cls_weight': settings.cls_weight,
                       'reg_weight': 1.0, 'use_gpytorch': settings.use_gpytorch, 'use_shared_kernel': False,
                       'shared_inducing_points': False, 'early_stop': None}
-    model_settings['latent_dim'] = 10
     batch_shape = torch.Size([model_settings['data_dim']])
 
     likelihood_reg = GaussianLikelihood(batch_shape=batch_shape)
@@ -256,13 +258,19 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
         nn.ReLU()
     )
 
-    data_train1, data_val, labels_train1, labels_val, y_train1, y_val = train_test_split(data_train, labels_train,
-                                                                                         y_train_onehot,
-                                                                                         test_size=0.2,
-                                                                                         random_state=42,
-                                                                                         stratify=labels_train)
+    if use_validation is True:
+        data_train, data_val, labels_train, labels_val, y_train_onehot, y_val = train_test_split(data_train,
+                                                                                                 labels_train,
+                                                                                                 y_train_onehot,
+                                                                                                 test_size=0.2,
+                                                                                                 random_state=42,
+                                                                                                 stratify=labels_train)
+    else:
+        data_val = torch.Tensor(data_test)
+        labels_val = labels_test
+        y_val = torch.Tensor(y_test_onehot)
 
-    model = FastLDGD(torch.tensor(data_train1, dtype=torch.float32),
+    model = FastLDGD(torch.tensor(data_train, dtype=torch.float32),
                      kernel_reg=kernel_reg,
                      kernel_cls=kernel_cls,
                      num_classes=y_train_onehot.shape[-1],
@@ -281,11 +289,14 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
     if settings.load_trained_model is False:
         # spilit train to train and validation using 90% for training and 10% for validation skleren train_test_split
 
-        losses, loss_dict, *_ = model.train_model(yn=data_train1, ys=y_train1,
+        losses, loss_dict, *_ = model.train_model(yn=data_train, ys=y_train_onehot,
                                                   epochs=settings.num_epochs_train,
                                                   batch_size=settings.batch_size,
                                                   yn_test=data_val,
-                                                  ys_test=labels_val)
+                                                  ys_test=labels_val,
+                                                  save_best_result=True,
+                                                  path_save=paths.path_model)
+        model.load_weights(paths.path_model)
         num_figures = len(loss_dict)
 
         fig, axs = plt.subplots(num_figures, 1, figsize=(10, 5 * num_figures))
@@ -299,6 +310,8 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
             axs[i].set_ylabel(key)
             axs[i].axvline(x=max_test_loss_arg, color='r', linestyle='--')
         plt.tight_layout()
+        plt.savefig(paths.path_result + 'losses.png')
+        plt.savefig(paths.path_result + 'losses.svg')
         plt.show()
         # early_stop=early_stop)
         model.save_wights(path_save=paths.path_model)

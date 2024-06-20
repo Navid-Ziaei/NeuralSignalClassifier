@@ -78,6 +78,8 @@ if isinstance(settings.cross_validation_mode, int):
 
 elif isinstance(settings.cross_validation_mode, str) and settings.cross_validation_mode == 'block':
     kf = None
+elif isinstance(settings.cross_validation_mode, str) and settings.cross_validation_mode == 'order':
+    kf = None
 else:
     raise ValueError("cross_validation_mode should be number of folds or be 'block' for block based")
 
@@ -102,7 +104,7 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
     # Perform cross-validation
     fold_results = {method: [] for method in settings.method_list}
 
-    if kf is None:
+    if kf is None and settings.cross_validation_mode == 'block':
         block_nums = features_df['block_number'].unique()
         folds = [(np.where(features_df['block_number'] != block)[0],
                   np.where(features_df['block_number'] == block)[0]) for block in block_nums]
@@ -110,11 +112,16 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
         fold_blocks = [(features_df[features_df['block_number'] != block]['block_number'].unique(),
                         features_df[features_df['block_number'] == block]['block_number'].unique()) for block in
                        block_nums]
-
+    if kf is None and settings.cross_validation_mode == 'order':
+        num_trials = labels_array.shape[0]
+        trial_idx = np.arange(num_trials)
+        fold_idx = np.int16(5*trial_idx / num_trials)
+        folds = [(np.where(fold_idx != fold)[0], np.where(fold_idx == fold)[0]) for fold in np.unique(fold_idx)]
     else:
         folds = kf.split(features_df, labels_array)
 
     for fold_idx, (train_index, test_index) in enumerate(folds):
+
         paths.create_fold_path(fold_idx)
 
         # select features
@@ -129,6 +136,8 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
         pid_train, pid_test = patients_ids[train_index], patients_ids[test_index]
 
         for method in settings.method_list:
+            print(f"=========== Train Subject {patient_id} ({settings.patient[patient_id]}) "
+                  f"from {len(features_raw_df_list)} Fold {fold_idx} Model {method} =========== \n")
             if method.lower() == 'xgboost':
                 results = train_xgb(data_train, labels_train, data_test, labels_test, paths)
             elif method.lower() == 'ldgd':
@@ -136,10 +145,10 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
                                      y_train, y_test,
                                      settings, paths)
             elif method.lower() == 'fast_ldgd':
-
                 results = train_fast_ldgd(data_train, labels_train, data_test, labels_test,
                                           y_train, y_test,
-                                          settings, paths)
+                                          settings, paths,
+                                          use_validation=True)
             else:
                 raise ValueError("Method should be 'xgboost' or 'ldgd'")
 
