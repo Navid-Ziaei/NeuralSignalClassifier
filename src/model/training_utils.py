@@ -42,6 +42,11 @@ def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_m
 
     # Make predictions
     predictions = model.predict(data_test)
+    group_result = {}
+    for uvalue in np.unique(labels_test):
+        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
+        # use majority voting
+        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
 
     # Calculate the F1-score
     f1 = f1_score(labels_test, predictions, average='macro')
@@ -62,7 +67,7 @@ def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_m
     with open(paths.path_result + 'xgb_classification_result.json', "w") as file:
         json.dump(metrics, file, indent=2)
 
-    return metrics
+    return metrics, group_result
 
 
 def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
@@ -130,19 +135,43 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
             axs[i].set_xlabel('Epoch')
             axs[i].set_ylabel(key)
         plt.tight_layout()
-        plt.savefig(paths.path_result + 'losses.png')
-        plt.savefig(paths.path_result + 'losses.svg')
-        plt.show()
+        plt.savefig(paths.path_result + 'losses_train_ldgd.png')
+        plt.savefig(paths.path_result + 'losses_train_ldgd.svg')
+        plt.cla()
+        plt.close()
+        #plt.show()
 
-        with open(paths.path_model + 'model_settings.json', 'w') as f:
+        with open(paths.path_model + 'model_settings_ldgd.json', 'w') as f:
             json.dump(model_settings, f, indent=2)
     else:
         losses = []
         model.load_weights(paths.path_model)
 
-    predictions, metrics, history_test = model.evaluate(yn_test=data_test, ys_test=labels_test,
-                                                        epochs=settings.num_epochs_test,
-                                                        save_path=paths.path_result)
+    predictions, metrics, history_test, loss_terms_test = model.evaluate(yn_test=data_test, ys_test=labels_test,
+                                                                         epochs=settings.num_epochs_test,
+                                                                         save_path=paths.path_result)
+    group_result = {}
+    for uvalue in np.unique(labels_test):
+        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
+        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
+
+
+    with open(paths.path_result + 'ldgd_classification_result.json', "w") as file:
+        json.dump(metrics, file, indent=2)
+    num_figures = len(loss_terms_test)
+    fig, axs = plt.subplots(num_figures, 1, figsize=(10, 5 * num_figures))
+    for i, (key, value) in enumerate(loss_terms_test.items()):
+        axs[i].plot(value)
+        axs[i].set_title(key)
+        axs[i].set_xlabel('Epoch')
+        axs[i].set_ylabel(key)
+    plt.tight_layout()
+    plt.savefig(paths.path_result + 'losses_test_ldgd.png')
+    plt.savefig(paths.path_result + 'losses_test_ldgd.svg')
+    #plt.show()
+    plt.cla()
+    plt.close()
+
 
     if model_settings['use_gpytorch'] is False:
         alpha_reg = model.kernel_reg.alpha.detach().numpy()
@@ -158,12 +187,14 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
                                      inverse_length_scale=alpha_reg,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result, file_name=f'gplvm_train_reg_result_all',
+                                     save_path=paths.path_result,
+                                     file_name=f'gplvm_train_reg_result_all_ldgd',
                                      show_errorbars=True)
     visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
                                      inverse_length_scale=alpha_cls,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result, file_name=f'gplvm_train_cls_result_all',
+                                     save_path=paths.path_result,
+                                     file_name=f'gplvm_train_cls_result_all_ldgd',
                                      show_errorbars=True)
 
     if model_settings['use_gpytorch'] is False:
@@ -177,27 +208,27 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     inducing_points = (history_test['z_list_reg'][-1], history_test['z_list_cls'][-1])
 
     visualization.plot_heatmap(X, labels_train, model, alpha_cls, cmap='binary', range_scale=1.2,
-                               file_name='latent_heatmap_train', inducing_points=inducing_points,
+                               file_name='latent_heatmap_train_ldgd', inducing_points=inducing_points,
                                save_path=paths.path_result,
                                device=device,
                                heat_map_mode='std', show_legend=False)
 
     visualization.plot_heatmap(X_test, labels_test, model, alpha_cls, cmap='binary', range_scale=1.2,
-                               file_name='latent_heatmap_test', inducing_points=inducing_points,
+                               file_name='latent_heatmap_test_ldgd', inducing_points=inducing_points,
                                save_path=paths.path_result,
                                device=device,
                                heat_map_mode='std', show_legend=False)
 
     visualization.animate_train(point_history=history_train['x_mu_list'],
                                 labels=labels_train,
-                                file_name='train_animation_with_inducing',
+                                file_name='train_animation_with_inducing_ldgd',
                                 save_path=paths.path_result,
                                 inverse_length_scale=alpha_cls,
                                 inducing_points_history=(history_train['z_list_reg'], history_train['z_list_cls']))
 
     visualization.animate_train(point_history=history_test['x_mu_list'],
                                 labels=labels_test,
-                                file_name='test_animation_with_inducing',
+                                file_name='test_animation_with_inducing_ldgd',
                                 save_path=paths.path_result,
                                 inverse_length_scale=alpha_cls,
                                 inducing_points_history=(history_test['z_list_reg'], history_test['z_list_cls']))
@@ -205,7 +236,7 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     visualization.plot_results_gplvm(X_test, std_test, labels=labels_test, losses=losses,
                                      inverse_length_scale=alpha_cls,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result, file_name=f'gplvm_test_result_all',
+                                     save_path=paths.path_result, file_name=f'gplvm_test_result_all_ldgd',
                                      show_errorbars=True)
 
     """
@@ -217,7 +248,7 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
                  file_name='latent_heatmap_test', inducing_points=inducing_points, save_path=paths.path_result[0])
     """
 
-    return metrics
+    return metrics, group_result
 
 
 def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
@@ -310,13 +341,15 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
             axs[i].set_ylabel(key)
             axs[i].axvline(x=max_test_loss_arg, color='r', linestyle='--')
         plt.tight_layout()
-        plt.savefig(paths.path_result + 'losses.png')
-        plt.savefig(paths.path_result + 'losses.svg')
-        plt.show()
+        plt.savefig(paths.path_result + 'losses_fast_ldgd.png')
+        plt.savefig(paths.path_result + 'losses_fast_ldgd.svg')
+        # plt.show()
+        plt.close()
+        plt.cla()
         # early_stop=early_stop)
         model.save_wights(path_save=paths.path_model)
 
-        with open(paths.path_model + 'model_settings.json', 'w') as f:
+        with open(paths.path_model + 'model_settings_fast_ldgd.json', 'w') as f:
             json.dump(model_settings, f, indent=2)
     else:
         losses = []
@@ -326,4 +359,12 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
                                               epochs=settings.num_epochs_test,
                                               save_path=paths.path_result)
 
-    return metrics
+    group_result = {}
+    for uvalue in np.unique(labels_test):
+        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
+        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
+
+    with open(paths.path_result + 'fast_ldgd_classification_result.json', "w") as file:
+        json.dump(metrics, file, indent=2)
+
+    return metrics, group_result

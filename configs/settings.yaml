@@ -1,22 +1,20 @@
 # List of patient IDs
 patient:
   - '101'
-  - '103'
-  - '104'
+#  - '103'
   - '106'
   - '107'
-  - '110'
-  - '111'
-  - '112'
-  - '113'
-  - '114'
-  - '115'
-  - '116'
-  - '201'
-  - '203'
-  - '204'
-  - '205'
-
+#  - '110'
+#  - '111'
+#  - '112'
+#  - '113'
+#  - '114'
+#  - '115'
+#  - '116'
+#  - '201'
+#  - '204'
+#  - '205'
+# Patients for CLear dataset:
 #  - 'p01'
 #  - 'p02'
 #  - 'p03'
@@ -35,8 +33,8 @@ debug_mode: false
 
 
 method_list:
-  - "xgboost"
-  - "fast_ldgd"
+#  - "xgboost"
+#  - "fast_ldgd"
   - "ldgd"
 
 metric_list:
@@ -52,6 +50,10 @@ feature_transformation : "normalize"  # Options: normalize, standardize, None
 # for pilot01 dataset (preprocessed h5 files): TargetValue
 # for pilot01 dataset (raw xdf files): decision, old_new, is_go, is_correct, is_experienced
 target_column : "TargetValue"
+# Number of folds for cross-validation mode (It can be a number of block for pilot1 task)
+cross_validation_mode: 'order'  # Options: 'order', 'kfold'
+# Proportion of the dataset to include in the test split
+test_size: 0.2
 
 
 # LDGD Configs
@@ -71,27 +73,14 @@ num_epochs_test : 5000
 
 # Save features to a file
 save_features: false
-
-# Load a pretrained model
-load_pretrained_model: true
-
-# Number of folds for cross-validation mode (It can be a number of block for pilot1 task)
-cross_validation_mode: 'order'
-
-# Proportion of the dataset to include in the test split
-test_size: 0.2
-
 # Load features from a file
 load_features: false
+load_pretrained_model: true # Load a pretrained model
 
-# Load epoched data
-load_epoched_data: true
 
-# Save epoched data to a file
-save_epoched_data: false
+# Dataset configs
+load_epoched_data: true  # Load epoched data
+save_epoched_data: false # Save epoched data to a file
+load_preprocessed_data: false # Load preprocessed data from a file
+save_preprocessed_data: false # Save preprocessed data to a file
 
-# Load preprocessed data from a file
-load_preprocessed_data: false
-
-# Save preprocessed data to a file
-save_preprocessed_data: false

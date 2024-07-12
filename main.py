@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
 # Load settings from settings.json
 settings = Settings()  # Initialize settings object
@@ -85,6 +86,7 @@ else:
 
 
 certain = []
+all_patient_group_results = {method: [] for method in settings.method_list}
 for patient_id, features_raw_df in enumerate(features_raw_df_list):
     print(f"============ Subject {patient_id} ({settings.patient[patient_id]}) from {len(features_raw_df_list)} ============ \n")
     # select patient
@@ -103,6 +105,7 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
 
     # Perform cross-validation
     fold_results = {method: [] for method in settings.method_list}
+    fold_results_group = {method: [] for method in settings.method_list}
 
     if kf is None and settings.cross_validation_mode == 'block':
         block_nums = features_df['block_number'].unique()
@@ -115,7 +118,7 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
     if kf is None and settings.cross_validation_mode == 'order':
         num_trials = labels_array.shape[0]
         trial_idx = np.arange(num_trials)
-        fold_idx = np.int16(5*trial_idx / num_trials)
+        fold_idx = np.int16(10*trial_idx / num_trials)
         folds = [(np.where(fold_idx != fold)[0], np.where(fold_idx == fold)[0]) for fold in np.unique(fold_idx)]
     else:
         folds = kf.split(features_df, labels_array)
@@ -139,13 +142,13 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
             print(f"=========== Train Subject {patient_id} ({settings.patient[patient_id]}) "
                   f"from {len(features_raw_df_list)} Fold {fold_idx} Model {method} =========== \n")
             if method.lower() == 'xgboost':
-                results = train_xgb(data_train, labels_train, data_test, labels_test, paths)
+                results, group_result = train_xgb(data_train, labels_train, data_test, labels_test, paths)
             elif method.lower() == 'ldgd':
-                results = train_ldgd(data_train, labels_train, data_test, labels_test,
+                results, group_result = train_ldgd(data_train, labels_train, data_test, labels_test,
                                      y_train, y_test,
                                      settings, paths)
             elif method.lower() == 'fast_ldgd':
-                results = train_fast_ldgd(data_train, labels_train, data_test, labels_test,
+                results, group_result = train_fast_ldgd(data_train, labels_train, data_test, labels_test,
                                           y_train, y_test,
                                           settings, paths,
                                           use_validation=True)
@@ -153,8 +156,10 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
                 raise ValueError("Method should be 'xgboost' or 'ldgd'")
 
             fold_results[method].append(results)
+            fold_results_group[method].append(group_result)
 
         plt.close('all')
+
     # Compute average scores
     for method in settings.method_list:
         for metric in settings.metric_list:
@@ -163,8 +168,53 @@ for patient_id, features_raw_df in enumerate(features_raw_df_list):
             results_logger.update_result(method, metric, avg_score, std_score)
             print(f"Method {method}: {metric}: {avg_score} +- {std_score}")
 
+    for key in fold_results.keys():
+        df = pd.DataFrame(fold_results[key])
+        df.to_csv(paths.results_base_path + f'{key}_results.csv', index=False)
+
+        # group base
+        # Extract true values and predictions from the given data
+        true_values = []
+        predictions = []
+
+        for gp_result in fold_results_group[key]:
+            for true_value, predicted_value in gp_result.items():
+                true_values.append(true_value)
+                predictions.append(predicted_value)
+
+        # Convert lists to numpy arrays
+        true_values = np.array(true_values)
+        predictions = np.array(predictions)
+
+        # Calculate accuracy
+        grp_accuracy = accuracy_score(true_values, predictions.round())
+        grp_precision = precision_score(true_values, predictions.round(), average='binary')
+        grp_recall = recall_score(true_values, predictions.round(), average='binary')
+        grp_f1 = f1_score(true_values, predictions.round(), average='binary')
+        grp_auc = roc_auc_score(true_values, predictions)
+
+        group_result = {
+            'accuracy': grp_accuracy,
+            'precision': grp_precision,
+            'recall': grp_recall,
+            'f1': grp_f1,
+            'auc': grp_auc
+        }
+        with open(paths.results_base_path + f'group_results_{key}.txt', 'w') as f:
+            f.write(str(group_result))
+
+        all_patient_group_results[key].append(group_result)
+
+
+
 result_df = results_logger.to_dataframe()
 result_df.to_csv(paths.base_path + paths.folder_name + '\\results.csv')
+
+for key in all_patient_group_results.keys():
+    df_gp = pd.DataFrame(all_patient_group_results[key], index=settings.patient)
+    df_gp.to_csv(paths.base_path + paths.folder_name + f'\\group_results_{key}.csv')
+
+
 
 
 
