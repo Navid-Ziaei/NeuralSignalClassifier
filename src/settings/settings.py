@@ -49,6 +49,12 @@ class Settings:
         self.num_epochs_test = 100
 
         self.binary_column = 'h5'
+        self.__dataset_task = 'm_sequence'
+        self.correlation_mode = "multi"
+        self.feature_extraction_configs = {}
+        self.preprocessing_configs = {}
+        self.single_event_target = "target_0_0"
+        self.num_folds = 5
 
     def load_settings(self):
         """
@@ -95,6 +101,23 @@ class Settings:
         if self.verbose is True:
             print("Patient: {}".format(self.patient))
 
+    @property
+    def dataset_task(self):
+        return self.__dataset_task
+
+    @dataset_task.setter
+    def dataset_task(self, value):
+        if value == 'm_sequence':
+            self.target_column = [f"target_{i}_{j}" for i in range(10) for j in range(10)]
+            self.__dataset_task = value
+        elif value == 'flicker':
+            self.target_column = 'ColorLev'
+            self.__dataset_task = value
+        elif value is None:
+            print("No task is selected (necessary for clear dataset)")
+            self.__dataset_task = value
+        else:
+            raise ValueError(f"The selected task {value} is not supported")
     @property
     def load_epoched_data(self):
         return self.__load_epoched_data

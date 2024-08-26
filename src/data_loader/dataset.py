@@ -73,6 +73,53 @@ class AbstractEEGDataLoader(ABC):
         """
         pass
 
+class CLEARDataLoader(AbstractEEGDataLoader):
+    def __init__(self, paths, settings):
+        super().__init__(paths, settings)
+        self.channel_groups = scipy.io.loadmat(self.channel_group_file)['ChGrp'][0]
+        logging.basicConfig(filename=paths.path_result + 'data_loading_log.txt', level=logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+        self.task = settings.dataset_task
+
+    def load_data(self, patient_ids='all', target_class='color'):
+        data_loader = iEEGDataLoader(patient=patient_ids,
+                                     target_class=target_class,
+                                     prepared_dataset_path=self.data_directory,
+                                     task=self.task,
+                                     file_format='npy')
+        dataset_list = data_loader.load_data()
+        """continuous_signal, continuous_indicator = dataset_list[0].epoched_to_continuous(patient=patient_ids,
+                                                                                        task=self.task,
+                                                                                        debug=False,
+                                                                                        save_path=None)
+        from ieeg_data_loader.visualization import plot_continuous_signal
+        plot_continuous_signal(continuous_signal, continuous_indicator,
+                               channel_names=dataset_list[0].channel_name,
+                               channel_number=15, task=self.task, save_path=None)"""
+
+        for patients_data in dataset_list:
+            if patients_data.data.shape[0]>80:
+                dataset = self.load_single_patient_data(patients_data)
+                self.all_patient_data[patients_data.meta[-1]] = dataset
+
+    def load_single_patient_data(self, data, dgd_outputs=None, preprocess_continuous_data=False):
+        data.get_time_annotation(patient=data.meta[1], task=data.meta[0].replace('_task', ''))
+
+        dataset = EEGDataSet()
+        dataset.data = data.data
+        dataset.response_time = None
+        dataset.labels = data.label
+        dataset.trial_index = np.arange(0, data.data.shape[0])
+        dataset.fs = data.fs
+        dataset.time_ms = data.time * 1000
+        dataset.channel_names = data.channel_name
+        dataset.file_name = data.meta[-1]
+        dataset.task = data.meta[0]
+        dataset.channel_group = self.channel_groups
+
+        return dataset
+
+
 
 class PilotEEGDataLoader(AbstractEEGDataLoader):
     def __init__(self, paths, settings):
@@ -621,7 +668,6 @@ class PilotEEGDataLoader(AbstractEEGDataLoader):
 
         return eeg_data_array, eeg_time, eeg_labels, trial_length, trial_index
 
-
 class VerbMemEEGDataLoader(AbstractEEGDataLoader):
     def __init__(self, paths, settings):
         super().__init__(paths, settings)
@@ -867,44 +913,6 @@ class VerbMemEEGDataLoader(AbstractEEGDataLoader):
             return False
 
         return True
-
-
-class CLEARDataLoader(AbstractEEGDataLoader):
-    def __init__(self, paths, settings):
-        super().__init__(paths, settings)
-        self.channel_groups = scipy.io.loadmat(self.channel_group_file)['ChGrp'][0]
-        logging.basicConfig(filename=paths.path_result + 'data_loading_log.txt', level=logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-
-    def load_data(self, patient_ids='all', task='flicker', target_class='color'):
-        data_loader = iEEGDataLoader(patient=patient_ids,
-                                     target_class=target_class,
-                                     prepared_dataset_path=self.data_directory,
-                                     task=task,
-                                     file_format='npy')
-        dataset_list = data_loader.load_data()
-
-        for patients_data in dataset_list:
-            dataset = self.load_single_patient_data(patients_data)
-            self.all_patient_data[patients_data.meta[-1]] = dataset
-
-    def load_single_patient_data(self, data, dgd_outputs=None, preprocess_continuous_data=False):
-        data.get_time_annotation(patient=data.meta[1], task=data.meta[0].split('_')[0])
-
-        dataset = EEGDataSet()
-        dataset.data = data.data
-        dataset.response_time = None
-        dataset.labels = data.label
-        dataset.trial_index = np.arange(0, data.data.shape[0])
-        dataset.fs = data.fs
-        dataset.time_ms = data.time * 1000
-        dataset.channel_names = data.channel_name
-        dataset.file_name = data.meta[-1]
-        dataset.task = data.meta[0]
-        dataset.channel_group = self.channel_groups
-
-        return dataset
-
 
 class EEGDataSet:
     """

@@ -1,60 +1,71 @@
 # List of patient IDs
-patient:
-  - '101'
-#  - '103'
-  - '106'
-  - '107'
-#  - '110'
-#  - '111'
-#  - '112'
-#  - '113'
-#  - '114'
-#  - '115'
-#  - '116'
-#  - '201'
-#  - '204'
-#  - '205'
-# Patients for CLear dataset:
-#  - 'p01'
-#  - 'p02'
-#  - 'p03'
-#  - 'p04'
-#  - 'p05'
-#  - 'p06'
-#  - 'p07'
-#  - 'p08'
-#  - 'p13'
-
-# Dataset name to use : "pilot01" "clear"
-dataset: "pilot01"
-
+# pilot1: '101' '103' '106' '107' '110' '111' '112' '113' '114' '115' '116' '201' '204' '205'
+# CLEAR: 'p01' ... 'p18'
 # Enable or disable debug mode
-debug_mode: false
+debug_mode: true
 
+## ========================= Dataset ===============================
+patient:
+  - 'p15'
+  - 'p14'
+  - 'p13'
+  - 'p12'
+  - 'p11'
+  - 'p10'
+  - 'p09'
+  - 'p08'
+  - 'p07'
+  - 'p06'
+  - 'p05'
+  - 'p04'
+  - 'p03'
+  - 'p02'
+  - 'p01'
+
+dataset: "clear" # Dataset name to use : "pilot01" "clear"
+dataset_task: "m_sequence" # "flicker" or "m_sequence"
+single_event_target: "target_9_8"
+
+# Preprocessing
+preprocessing_configs: {} #{'low_pass_filter': {'cutoff': 45, 'order': 5}}
+load_preprocessed_data: false # Load preprocessed data from a file
+save_preprocessed_data: false # Save preprocessed data to a file
+
+# Feature extraction
+save_features: true
+load_features: true
+feature_extraction_configs : {
+        'time_n200': {'start_time': 150, 'end_time': 250},
+        'time_p300': {'start_time': 250, 'end_time': 550},
+        'time_post_p300': {'start_time': 550, 'end_time': 750},
+        'frequency1': {'time_start': 0, 'end_time': 500},
+        'frequency2': {'time_start': 250, 'end_time': 700}
+    }
+feature_transformation : "normalize"  # Options: normalize, standardize, None
+
+# Feature selection
+features_selection_method : "all"  # Options: all, corr, pre_selected
+correlation_mode: "multi" # correlation based on single event or multi event Options: 'multi' or 'single'
+
+
+# =========================== Training ===================================
+cross_validation_mode: 'order'  # Options: 'single', 'order', 'kfold'
+num_folds: 5
+test_size: 0.2
+load_pretrained_model: true # Load a pretrained model
+
+# ============================= Model ====================================
 
 method_list:
-#  - "xgboost"
+  - "xgboost"
 #  - "fast_ldgd"
-  - "ldgd"
+#  - "ldgd"
 
 metric_list:
   - "accuracy"
   - "f1_score"
   - "precision"
   - "recall"
-
-#  data
-features_selection_method : "corr"  # Options: all, corr, pre_selected
-feature_transformation : "normalize"  # Options: normalize, standardize, None
-# for clear dtaset: ColorLev
-# for pilot01 dataset (preprocessed h5 files): TargetValue
-# for pilot01 dataset (raw xdf files): decision, old_new, is_go, is_correct, is_experienced
-target_column : "TargetValue"
-# Number of folds for cross-validation mode (It can be a number of block for pilot1 task)
-cross_validation_mode: 'order'  # Options: 'order', 'kfold'
-# Proportion of the dataset to include in the test split
-test_size: 0.2
-
 
 # LDGD Configs
 data_dim : None
@@ -69,18 +80,4 @@ load_trained_model : False
 batch_size : 100
 num_epochs_train : 5000
 num_epochs_test : 5000
-
-
-# Save features to a file
-save_features: false
-# Load features from a file
-load_features: false
-load_pretrained_model: true # Load a pretrained model
-
-
-# Dataset configs
-load_epoched_data: true  # Load epoched data
-save_epoched_data: false # Save epoched data to a file
-load_preprocessed_data: false # Load preprocessed data from a file
-save_preprocessed_data: false # Save preprocessed data to a file
 

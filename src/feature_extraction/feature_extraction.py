@@ -199,17 +199,20 @@ class FeatureExtractor:
         for key in train_labels.keys():
             labels_array[key] = np.concatenate(train_labels[key], axis=0)
 
-        # old_new_label_array = np.concatenate(train_old_new_label, axis=0)
-        # decision_label_array = np.concatenate(train_decision_label, axis=0)
-        # block_idx_array = np.concatenate(train_block_idx, axis=0)
-
         features_matrix = np.concatenate(train_data, axis=0)
 
         features_df = pd.DataFrame(features_matrix, columns=features_list_name)
         features_df['id'] = patients_ids
         features_df['subject_file'] = train_patient_name
+        key1 = list(labels_array.keys())[0]
+        if features_df.shape[0] < len(labels_array[key1]):
+            print(
+                f"The feature matrix has {features_df.shape[0]} trial but the label array is of size {len(labels_array[key1])}")
         for key in train_labels.keys():
-            features_df[key] = labels_array[key]
+            if features_df.shape[0] < len(labels_array[key]):
+                features_df[key] = labels_array[key][:features_df.shape[0]]
+            else:
+                features_df[key] = labels_array[key]
 
         return features_df, features_matrix, labels_array, patients_ids, features_list_name
 
@@ -313,7 +316,7 @@ class FeatureExtractor:
 
         return connectivity_features
 
-    def extract_frequency_features(self, dataset, time_start=0, end_time=750):
+    def extract_frequency_features(self, dataset, time_start=0, end_time=750, normalization='z_score'):
         """
         Extract frequency-domain features from EEG data.
 
@@ -340,7 +343,8 @@ class FeatureExtractor:
             'theta': (4, 8),
             'alpha': (8, 12),
             'beta': (13, 30),
-            'gamma': (30, 45)
+            'gamma': (30, 45),
+            'high-gamma': (60, 115)
         }
 
         # Convert time to indices
@@ -348,10 +352,20 @@ class FeatureExtractor:
 
         for band_name, freq_range in freq_bands.items():
             # Compute power in the given frequency band
-            features['freq_' + band_name + f'_time {time_start} to {end_time}'] = self._compute_band_power(eeg_data,
-                                                                                                           freq_range,
-                                                                                                           start_idx,
-                                                                                                           end_idx)
+            band_power = self._compute_band_power(eeg_data, freq_range, start_idx, end_idx)
+
+            # Apply normalization
+            if normalization == 'total_power':
+                total_power = np.sum(band_power, axis=-1, keepdims=True)
+                normalized_power = band_power / total_power
+            elif normalization == 'z_score':
+                mean_power = np.mean(band_power, axis=-1, keepdims=True)
+                std_power = np.std(band_power, axis=-1, keepdims=True)
+                normalized_power = (band_power - mean_power) / std_power
+            else:
+                normalized_power = band_power
+
+            features[f'freq_{band_name}_time_{time_start}_to_{end_time}'] = normalized_power
 
         return features
 

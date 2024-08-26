@@ -3,6 +3,8 @@ import datetime
 from pathlib import Path
 import os
 
+import yaml
+
 
 class Paths:
     def __init__(self, settings):
@@ -20,6 +22,7 @@ class Paths:
 
         self.patient = settings.patient
         self.debug_mode = settings.debug_mode
+        self.settings = settings
 
     def load_device_paths(self):
 
@@ -36,10 +39,10 @@ class Paths:
 
         """ loading device path from the json file """
         try:
-            with open(working_folder + "/configs/device_path.json", "r") as file:
-                device = json.loads(file.read())
+            with open(working_folder + "/configs/device_path.yaml", "r") as file:
+                device = yaml.safe_load(file)
         except:
-            raise Exception('Could not load device_path.json from the working directory!')
+            raise Exception('Could not load device_path.yaml from the working directory!')
 
         for key, value in device.items():
             if hasattr(self, key):
@@ -62,6 +65,11 @@ class Paths:
             dir_path = ''
 
         self.base_path = dir_path + '/results/'
+
+        if self.settings.dataset == 'clear':
+            self.base_path += f'/{self.settings.dataset_task}/'
+
+        self.eda_results = self.base_path + '/eda_results/'
         if self.debug_mode is False:
             self.folder_name = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         else:
@@ -71,6 +79,7 @@ class Paths:
             shutil.rmtree(results_base_path)"""
 
         Path(results_base_path).mkdir(parents=True, exist_ok=True)
+        Path(self.eda_results).mkdir(parents=True, exist_ok=True)
         Path(results_base_path + 'model/').mkdir(parents=True, exist_ok=True)
         self.path_model = os.path.join(results_base_path + 'model/')
         self.path_result = os.path.join(results_base_path)
@@ -88,7 +97,6 @@ class Paths:
         Path(self.fold_path + 'model/').mkdir(parents=True, exist_ok=True)
         self.path_model = os.path.join(self.fold_path + 'model/')
         self.path_result = os.path.join(self.fold_path)
-
 
     def create_paths_subject(self, patient_id):
         self.path_subject_result[patient_id] = self.path_result + patient_id + "/"
