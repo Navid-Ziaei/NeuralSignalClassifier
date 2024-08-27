@@ -6,21 +6,8 @@ debug_mode: true
 
 ## ========================= Dataset ===============================
 patient:
-  - 'p15'
-  - 'p14'
   - 'p13'
-  - 'p12'
-  - 'p11'
-  - 'p10'
-  - 'p09'
-  - 'p08'
-  - 'p07'
-  - 'p06'
-  - 'p05'
-  - 'p04'
-  - 'p03'
-  - 'p02'
-  - 'p01'
+
 
 dataset: "clear" # Dataset name to use : "pilot01" "clear"
 dataset_task: "m_sequence" # "flicker" or "m_sequence"
@@ -28,12 +15,12 @@ single_event_target: "target_9_8"
 
 # Preprocessing
 preprocessing_configs: {} #{'low_pass_filter': {'cutoff': 45, 'order': 5}}
-load_preprocessed_data: false # Load preprocessed data from a file
-save_preprocessed_data: false # Save preprocessed data to a file
+load_preprocessed_data: true # Load preprocessed data from a file
+save_preprocessed_data: true # Save preprocessed data to a file
 
 # Feature extraction
 save_features: true
-load_features: true
+load_features: false
 feature_extraction_configs : {
         'time_n200': {'start_time': 150, 'end_time': 250},
         'time_p300': {'start_time': 250, 'end_time': 550},

@@ -86,6 +86,7 @@ class Paths:
 
     def create_subject_paths(self, subject_name):
         self.results_base_path = self.base_path + self.folder_name + f'/{subject_name}/'
+        print(f"Creating path {self.results_base_path} ...")
         Path(self.results_base_path).mkdir(parents=True, exist_ok=True)
         Path(self.results_base_path + 'model/').mkdir(parents=True, exist_ok=True)
         self.path_model = os.path.join(self.results_base_path + 'model/')

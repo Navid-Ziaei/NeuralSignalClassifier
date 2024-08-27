@@ -21,7 +21,8 @@ def plot_metric_heatmaps(df, metric='precision', grid_size=(10, 10), save_dir='h
         save_dir (str): Directory to save the heatmaps.
 
     Returns:
-        None: Displays and saves the heatmap plots.
+        mean_grid:
+        std_grid:
     """
     # Ensure the save directory exists
     os.makedirs(save_dir, exist_ok=True)
@@ -59,6 +60,8 @@ def plot_metric_heatmaps(df, metric='precision', grid_size=(10, 10), save_dir='h
 
     # Show the heatmap
     plt.close()
+
+    return mean_grid, std_grid
 
 def plot_histogram(values, xlabel, ylabel, title=None):
     plt.figure(figsize=(10, 6))

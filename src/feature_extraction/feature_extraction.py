@@ -69,6 +69,7 @@ class FeatureExtractor:
         EEGDataSet
             The EEGDataSet instance with features extracted for each patient.
         """
+        features_all_blocks = {}
         for index, (patient_id, patient_dataset) in enumerate(eeg_dataset.all_patient_data.items()):
             # Print progress information
             print(f"Subject {index} from {len(eeg_dataset.all_patient_data.keys())}: {patient_id} Feature Extraction")
@@ -82,7 +83,11 @@ class FeatureExtractor:
             self.fs = patient_dataset.fs
 
             # Define the path to save or load feature data
-            feature_file = os.path.join(self.paths.feature_path, f"{patient_id}_features.json")
+            if self.settings.dataset == 'clear':
+                file_name = f"{patient_id.split('.')[0]}_{self.settings.dataset_task}_features.csv"
+            else:
+                file_name = f"{patient_id}_features.csv"
+            feature_file = os.path.join(self.paths.feature_path, file_name)
 
             # Check if feature data already exists and should be loaded
             if os.path.exists(feature_file) and self.settings.load_features is True:
@@ -97,10 +102,45 @@ class FeatureExtractor:
                 self.all_patient_features[patient_id] = features
 
                 # Save the features to a file for future use
-                self.save_features(features, feature_file)
+                if self.settings.load_features is True:
+                    self.save_features(features, feature_file)
                 logging.info("Successfully Extracted!")
+                features_df = self.feature_dict_to_df(eeg_dataset,
+                                                      feature_dict=features,
+                                                      patient_id=index,
+                                                      patient_file_name=patient_id)
+                if self.settings.save_features is True:
+                    features_df.to_csv(feature_file)
 
-        return eeg_dataset
+                features_all_blocks[patient_id] = features_df
+
+        return features_all_blocks
+
+    def feature_dict_to_df(self, eeg_dataset, feature_dict, patient_id, patient_file_name):
+        features_list, features_list_name = self.process_patient_features(patient_file_name, feature_dict,
+                                                                          eeg_dataset)
+
+        features_matrix = np.concatenate(features_list, axis=1)
+
+        # Create the features matrix DataFrame with initial feature columns
+        features_df = pd.DataFrame(features_matrix, columns=features_list_name)
+
+        # Create the patient ID and patient name columns as separate DataFrames
+        patients_ids_df = pd.DataFrame({'id': patient_id*np.ones(features_matrix.shape[0])})
+        train_patient_name_df = pd.DataFrame({'subject_file': features_matrix.shape[0]*[patient_file_name]})
+
+        # Concatenate all columns (features, patient IDs, and patient names) at once
+        features_df = pd.concat([patients_ids_df, train_patient_name_df, features_df], axis=1)
+
+        # Add the labels columns all at once
+        labels_df = eeg_dataset.all_patient_data[patient_file_name].labels.copy()
+        if features_df.shape[0] < len(labels_df):
+            labels_df = labels_df.iloc[:features_df.shape[0]]
+
+        # Concatenate the label DataFrame to the features DataFrame
+        features_df = pd.concat([features_df, labels_df], axis=1)
+
+        return features_df
 
     def apply_feature_extraction(self, dataset, **kwargs) -> dict:
         """
@@ -139,82 +179,25 @@ class FeatureExtractor:
         Extract features from EEG data for all patients in the EEGDataSet.
 
         Args:
-            eeg_dataset:  EEGDataSet instance containing patient data.
+            eeg_dataset: EEGDataSet instance containing patient data.
 
         Returns:
             tuple: A tuple containing the extracted features, labels, patient IDs, and feature names.
-
         """
-        # Initialize lists to store extracted features, labels, and patient IDs
-        train_data, train_patient, train_patient_name = [], [], []
+        initial_labels = eeg_dataset.all_patient_data[list(self.all_patient_features.keys())[0]].labels
 
-        label = eeg_dataset.all_patient_data[list(self.all_patient_features.keys())[0]].labels
-        train_labels = {key: [] for key in label.keys()}
+        train_data, train_patient, train_patient_name = [], [], []
+        train_labels = {key: [] for key in initial_labels.keys()}
 
         for patient_index, (patient_id, patient_features) in enumerate(self.all_patient_features.items()):
-            print(f"sub {patient_index} from {len(self.all_patient_features.keys())}")
-            features_list, features_list_name = [], []
-            label = eeg_dataset.all_patient_data[patient_id].labels
+            print(f"Processing patient {patient_index + 1}/{len(self.all_patient_features)}: {patient_id}")
+            features_list, features_list_name = self.process_patient_features(patient_id, patient_features, eeg_dataset)
 
-            if self.settings.dataset == 'pilot01':
-                response_time_patient = eeg_dataset.all_patient_data[patient_id].response_time[:, None]
-                # features_list.append(response_time_patient)
-                # features_list_name.extend(['reaction_time'])
-            if self.settings.dataset == 'verbmem':
-                old_new_label = eeg_dataset.all_patient_data[patient_id].trial_type - 1
-                decision_label = eeg_dataset.all_patient_data[patient_id].decision * 0.5 + 0.5
-                trial_block = eeg_dataset.all_patient_data[patient_id].block_number
-            channel_names = eeg_dataset.all_patient_data[patient_id].channel_names
-
-            for trial_index, (feature_name, subject_features) in enumerate(patient_features.items()):
-                # Get the label and response time for the current trial
-                if feature_name.startswith('coh_') and feature_name.endswith('_freqs'):
-                    pass
-                else:
-                    if subject_features.shape[-1] == len(channel_names):
-                        feature_labels = [ch + '-' + feature_name for ch in channel_names]
-                        features_list_name.extend(feature_labels)
-                    elif feature_name == 'coh_tot_coh':
-                        feature_labels = ['total coherency ' + freq for freq in ['5', '8', '13', '30']]
-                        features_list_name.extend(feature_labels)
-                    else:
-                        subject_features = subject_features.reshape(subject_features.shape[0], -1)
-                        frequencies = [5, 8, 13, 30]
-                        groups = ['group', 'group1', 'group2', 'group3', 'group4', 'group5', 'group6', 'group7']
-                        feature_labels = [f'coh_vec_coh_{freq}_{group}' for freq in frequencies for group in groups]
-                        features_list_name.extend(feature_labels)
-                    if subject_features.shape[-1] != len(feature_labels):
-                        raise ValueError("feature_labels should be the same size with subject features")
-                    features_list.append(subject_features)
             train_data.append(np.concatenate(features_list, axis=1))
-            for key in train_labels.keys():
-                train_labels[key].append(label[key])
+            self.append_labels_and_patient_info(train_labels, eeg_dataset.all_patient_data[patient_id].labels,
+                                                patient_index, train_patient, train_patient_name, features_list)
 
-            train_patient.append(np.ones(features_list[-1].shape[0]) * patient_index)
-            train_patient_name.extend([patient_id] * features_list[-1].shape[0])
-
-        # Convert lists to numpy arrays
-        patients_ids = np.concatenate(train_patient, axis=0)
-        labels_array = train_labels.copy()
-        for key in train_labels.keys():
-            labels_array[key] = np.concatenate(train_labels[key], axis=0)
-
-        features_matrix = np.concatenate(train_data, axis=0)
-
-        features_df = pd.DataFrame(features_matrix, columns=features_list_name)
-        features_df['id'] = patients_ids
-        features_df['subject_file'] = train_patient_name
-        key1 = list(labels_array.keys())[0]
-        if features_df.shape[0] < len(labels_array[key1]):
-            print(
-                f"The feature matrix has {features_df.shape[0]} trial but the label array is of size {len(labels_array[key1])}")
-        for key in train_labels.keys():
-            if features_df.shape[0] < len(labels_array[key]):
-                features_df[key] = labels_array[key][:features_df.shape[0]]
-            else:
-                features_df[key] = labels_array[key]
-
-        return features_df, features_matrix, labels_array, patients_ids, features_list_name
+        return self.construct_output(train_data, train_labels, train_patient, train_patient_name)
 
     def extract_time_features(self, data, start_time=150, end_time=250):
         """
@@ -453,3 +436,116 @@ class FeatureExtractor:
         """
         with open(file_path, 'rb') as f:
             return pkl.load(f)
+
+    def process_patient_features(self, patient_id, patient_features, eeg_dataset):
+        """
+        Process and extract features for a specific patient.
+
+        Args:
+            patient_id: The ID of the patient.
+            patient_features: A dictionary of features for the patient.
+            eeg_dataset: EEGDataSet instance containing patient data.
+
+        Returns:
+            tuple: A tuple containing a list of feature arrays and a list of feature names.
+        """
+        features_list, features_list_name = [], []
+        channel_names = eeg_dataset.all_patient_data[patient_id].channel_names
+
+        self.process_dataset_specific_features(patient_id, eeg_dataset)
+
+        for feature_name, subject_features in patient_features.items():
+            if not (feature_name.startswith('coh_') and feature_name.endswith('_freqs')):
+                feature_labels = self.get_feature_labels(feature_name, subject_features, channel_names)
+                if subject_features.shape[-1] != len(feature_labels):
+                    raise ValueError("Feature labels should be the same size as subject features.")
+
+                features_list_name.extend(feature_labels)
+                features_list.append(subject_features)
+
+        return features_list, features_list_name
+
+    def process_dataset_specific_features(self, patient_id, eeg_dataset):
+        """
+        Process dataset-specific features for a patient.
+
+        Args:
+            patient_id: The ID of the patient.
+            eeg_dataset: EEGDataSet instance containing patient data.
+        """
+        if self.settings.dataset == 'pilot01':
+            response_time_patient = eeg_dataset.all_patient_data[patient_id].response_time[:, None]
+        elif self.settings.dataset == 'verbmem':
+            old_new_label = eeg_dataset.all_patient_data[patient_id].trial_type - 1
+            decision_label = eeg_dataset.all_patient_data[patient_id].decision * 0.5 + 0.5
+            trial_block = eeg_dataset.all_patient_data[patient_id].block_number
+
+    def get_feature_labels(self, feature_name, subject_features, channel_names):
+        """
+        Generate feature labels based on the feature name and subject features.
+
+        Args:
+            feature_name: The name of the feature.
+            subject_features: The feature data for the subject.
+            channel_names: List of channel names from the EEG data.
+
+        Returns:
+            list: A list of feature labels.
+        """
+        if subject_features.shape[-1] == len(channel_names):
+            return [f"{ch}-{feature_name}" for ch in channel_names]
+        elif feature_name == 'coh_tot_coh':
+            return [f"total coherency {freq}" for freq in ['5', '8', '13', '30']]
+        else:
+            subject_features = subject_features.reshape(subject_features.shape[0], -1)
+            frequencies = [5, 8, 13, 30]
+            groups = [f"group{idx}" for idx in range(8)]
+            return [f"coh_vec_coh_{freq}_{group}" for freq in frequencies for group in groups]
+
+    def append_labels_and_patient_info(self, train_labels, labels, patient_index, train_patient, train_patient_name,
+                                       features_list):
+        """
+        Append the labels and patient information for the current patient.
+
+        Args:
+            train_labels: Dictionary to store training labels for all patients.
+            labels: Labels for the current patient.
+            patient_index: Index of the current patient.
+            train_patient: List to store patient indices.
+            train_patient_name: List to store patient names.
+            features_list: List of extracted features for the current patient.
+        """
+        for key in train_labels.keys():
+            train_labels[key].append(labels[key])
+
+        train_patient.append(np.ones(features_list[-1].shape[0]) * patient_index)
+        train_patient_name.extend([patient_index] * features_list[-1].shape[0])
+
+    def construct_output(self, train_data, train_labels, train_patient, train_patient_name):
+        """
+        Construct the final output consisting of features, labels, patient IDs, and feature names.
+
+        Args:
+            train_data: List of feature arrays for all patients.
+            train_labels: Dictionary of labels for all patients.
+            train_patient: List of patient indices.
+            train_patient_name: List of patient names.
+
+        Returns:
+            tuple: A tuple containing the extracted features, labels, patient IDs, and feature names.
+        """
+        patients_ids = np.concatenate(train_patient, axis=0)
+        labels_array = {key: np.concatenate(value, axis=0) for key, value in train_labels.items()}
+        features_matrix = np.concatenate(train_data, axis=0)
+
+        features_df = pd.DataFrame(features_matrix, columns=train_labels.keys())
+        features_df['id'] = patients_ids
+        features_df['subject_file'] = train_patient_name
+
+        for key in train_labels.keys():
+            if features_df.shape[0] < len(labels_array[key]):
+                features_df[key] = labels_array[key][:features_df.shape[0]]
+            else:
+                features_df[key] = labels_array[key]
+
+        return features_df, features_matrix, labels_array, patients_ids, list(train_labels.keys())

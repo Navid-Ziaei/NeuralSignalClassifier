@@ -1,3 +1,5 @@
+import os
+
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from src.settings import Paths, Settings
 from src.data_loader import VerbMemEEGDataLoader, PilotEEGDataLoader, CLEARDataLoader
@@ -18,10 +20,10 @@ def main():
     paths.create_paths()
 
     # Load or extract features
-    features_raw_df_list = load_or_extract_features(settings, paths)
+    features_raw_df_dict = load_or_extract_features(settings, paths)
 
     # Perform training with cross-validation or single fold
-    train_model_with_folds(features_raw_df_list, settings, paths)
+    train_model_with_folds(features_raw_df_dict, settings, paths)
 
 
 def load_or_extract_features(settings, paths):
@@ -40,20 +42,20 @@ def load_or_extract_features(settings, paths):
         Returns:
             List[pd.DataFrame]: A list of DataFrames, each containing the features for a patient.
     """
-    features_raw_df_list = []
+    features_raw_df_dict = {}
     for patient in settings.patient:
-        file_name = f"feature_{settings.dataset}_{patient}"
-        if settings.dataset == 'clear':
-            file_name += f'_{settings.dataset_task}'
-        feature_file = os.path.join(paths.feature_path, f"{file_name}.csv")
-        if settings.load_features and os.path.exists(feature_file):
-            features_raw_df = pd.read_csv(feature_file)
+        file_list = [file for file in os.listdir(paths.feature_path) if
+                     file.endswith('.csv') and patient in file and settings.dataset_task in file]
+        if settings.load_features and len(file_list)>0:
+            features_raw_df = {}
+            for file in file_list:
+                features_raw_df['_'.join(file.split('_')[:-1])] = pd.read_csv(paths.feature_path+file)
         else:
             features_raw_df = extract_features_for_patient(patient, settings, paths)
-            if settings.save_features:
-                features_raw_df.to_csv(feature_file, index=False)
-        features_raw_df_list.append(features_raw_df)
-    return features_raw_df_list
+            # if settings.save_features:
+            #     features_raw_df.to_csv(feature_file, index=False)
+        features_raw_df_dict.update(features_raw_df)
+    return features_raw_df_dict
 
 
 def extract_features_for_patient(patient, settings, paths):
@@ -91,8 +93,8 @@ def extract_features_for_patient(patient, settings, paths):
 
     # Extract features from the preprocessed dataset
     feature_extractor = FeatureExtractor(paths=paths, settings=settings)
-    feature_extractor.extract_features(dataset, settings.feature_extraction_configs)
-    features_raw_df, *_ = feature_extractor.get_feature_array(dataset)
+    features_raw_df = feature_extractor.extract_features(dataset, settings.feature_extraction_configs)
+    # features_raw_df, *_ = feature_extractor.get_feature_array(dataset)
 
     return features_raw_df
 

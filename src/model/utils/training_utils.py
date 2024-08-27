@@ -21,7 +21,7 @@ from src.utils import get_labels, get_correlation_single_event, get_drop_columns
 from src.visualization.visualization_utils import plot_metric_heatmaps
 
 
-def train_model_with_folds(features_raw_df_list, settings, paths, enable_group_level_result=False):
+def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_level_result=False):
     """
     Train models using either k-fold cross-validation or a single train/test split for each patient's data.
 
@@ -35,7 +35,6 @@ def train_model_with_folds(features_raw_df_list, settings, paths, enable_group_l
     7. Optionally saves group-level results and overall results to CSV files.
 
     Args:
-        features_raw_df_list (List[pd.DataFrame]): A list of DataFrames, each containing the raw features for a patient.
         settings (Settings): The settings object containing configurations.
         paths (Paths): The paths object containing file paths.
         enable_group_level_result (bool): Whether to save group-level results. Defaults to False.
@@ -46,8 +45,8 @@ def train_model_with_folds(features_raw_df_list, settings, paths, enable_group_l
     results_logger = ResultList(method_list=settings.method_list, metric_list=settings.metric_list)
     all_patient_group_results = {method: [] for method in settings.method_list}
 
-    for patient_id, features_raw_df in enumerate(features_raw_df_list):
-        print(f"====== Subject {patient_id} ({settings.patient[patient_id]}) ====== \n")
+    for patient_id, (patient_file_name, features_raw_df) in enumerate(features_raw_df_dict.items()):
+        print(f"====== Subject {patient_id} ({patient_file_name.split('.')[0]}) ====== \n")
 
         # Prepare data by removing specific columns
         columns_to_remove = [col for col in features_raw_df.columns if "EX" in col]
@@ -99,14 +98,14 @@ def train_model_with_folds(features_raw_df_list, settings, paths, enable_group_l
         # Aggregate the results for fold reports
         aggregated_results = aggregate_fold_report_results(fold_report_results)
 
-        plot_metric_heatmaps(aggregated_results, metric='precision', grid_size=(10, 10), save_dir=paths.results_base_path)
-        plot_metric_heatmaps(aggregated_results, metric='recall', grid_size=(10, 10), save_dir=paths.results_base_path)
-        plot_metric_heatmaps(aggregated_results, metric='f1', grid_size=(10, 10), save_dir=paths.results_base_path)
+        mean_grid_precision, _ = plot_metric_heatmaps(aggregated_results, metric='precision', grid_size=(10, 10), save_dir=paths.results_base_path)
+        mean_grid_recall, _ = plot_metric_heatmaps(aggregated_results, metric='recall', grid_size=(10, 10), save_dir=paths.results_base_path)
+        mean_grid_f1, _ = plot_metric_heatmaps(aggregated_results, metric='f1-score', grid_size=(10, 10), save_dir=paths.results_base_path)
 
         # Save or print the DataFrames
         for method, df in aggregated_results.items():
             print(f"Aggregated results for {method}:\n", df)
-            df.to_csv(os.path.join(paths.base_path, paths.folder_name, f'{method}_fold_report_results.csv'))
+            df.to_csv(os.path.join(paths.results_base_path, f'{method}_fold_report_results.csv'))
 
         # Compute and save average scores across all folds (or the single split)
         for method in settings.method_list:
@@ -117,7 +116,7 @@ def train_model_with_folds(features_raw_df_list, settings, paths, enable_group_l
                 print(f"Method {method}: {metric}: {avg_score} ± {std_score}")
 
             # Save group-level results
-            save_group_results(fold_results_group, method, paths.results_base_path)
+            # save_group_results(fold_results_group, method, paths.results_base_path)
 
         # Update results across all patients
         if enable_group_level_result:
