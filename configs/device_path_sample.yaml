@@ -1,0 +1,30 @@
+raw_dataset_path: "D:\\Datasets\\CLEAR\\interim\\"
+preprocessed_dataset_path: "D:\\Datasets\\Dataset\\CLEAR\\preprocessed\\"
+feature_path: "D:\\Datasets\\CLEAR\\features\\"
+model_path: "D:\\projects\\Neural_Signal_Classifier\\"
+
+
+
+
+# iEEG_data: "D:\\Navid\\Dataset\\CLEAR\\interim\\",
+# Pilot_data: "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\",
+
+# device path clear
+#"raw_dataset_path": "D:\\Datasets\\CLEAR\\interim\\"
+#"preprocessed_dataset_path": "D:\\Datasets\\Dataset\\CLEAR\\preprocessed\\"
+#"feature_path": "D:\\Datasets\\CLEAR\\features\\"
+#"model_path": "D:\\projects\\Neural_Signal_Classifier\\"
+# device path 3
+#"raw_dataset_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\",
+#"preprocessed_dataset_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\preprocessed\\",
+#"feature_path": "C:\\Users\\nziaei\\OneDrive - Worcester Polytechnic Institute (wpi.edu)\\eeg_project\\pilot1\\merged\\features\\",
+#"model_path": "D:\\Navid\\Projects2\\lexical_memory_task_eeg\\"
+
+
+# device path pilot1 on my laptop
+#"raw_dataset_path": "D:\\Datasets\\Pilot1\\Trials\\trials_images\\"
+#"preprocessed_dataset_path": "D:\\Datasets\\Pilot1\\Trials\\trials_images\\preprocessed\\"
+#"feature_path": "D:\\Datasets\\Pilot1\\Trials\\trials_images\\features\\"
+#"model_path": "D:\\projects\\Neural_Signal_Classifier\\"
+
+

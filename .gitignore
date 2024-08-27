@@ -6,7 +6,7 @@ data/
 .idea/
 .spyderproject/
 .spyproject/
-device_path.yaml
+configs/device_path.yaml
 configs/settings.yaml
 data/
 
