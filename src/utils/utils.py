@@ -3,7 +3,7 @@ import os
 from scipy.stats import pointbiserialr
 import numpy as np
 import pandas as pd
-
+from sklearn.preprocessing import OneHotEncoder
 from src.utils.verbmem_utils import get_labels_verbmem, get_labels_pilot1
 
 
@@ -101,8 +101,11 @@ def generate_one_hot_labels(labels_array):
     if len(labels_array.shape) > 1 and labels_array.shape[1] == 100:
         return labels_array
 
-    y_one_hot = np.zeros((labels_array.size, 2))
-    y_one_hot[np.arange(labels_array.size), labels_array.astype(int)] = 1
+
+    encoder = OneHotEncoder(sparse_output=False)
+    # Fit and transform the data
+    y_one_hot = encoder.fit_transform(labels_array)
+
     return y_one_hot.astype(int)
 
 
@@ -159,7 +162,7 @@ def remove_duplicates(input_list):
 
 def get_selected_features(features_df, settings, paths, fold_idx, train_index,
                           pre_selected_features=None,
-                          target_columns_drop=None):
+                          target_columns_drop=None, num_important_features=25):
     target_columns_drop = target_columns_drop or ['id', 'old_new', 'decision', 'subject_file']
     pre_selected_features = pre_selected_features or [
         'reaction_time', 'D17-time_post_p300', 'A18-time_post_p300', 'D27-time_post_p300',
@@ -175,7 +178,8 @@ def get_selected_features(features_df, settings, paths, fold_idx, train_index,
     selected_features = select_features(features_df, settings=settings, paths=paths, fold_idx=fold_idx,
                                         train_index=train_index,
                                         pre_selected_features=pre_selected_features,
-                                        drop_columns=target_columns_drop)
+                                        drop_columns=target_columns_drop,
+                                        nlargest=num_important_features)
 
     with open(os.path.join(paths.path_result, f'features_fold{fold_idx + 1}.json'), "w") as file:
         json.dump(selected_features, file, indent=2)
@@ -190,7 +194,7 @@ def get_selected_features(features_df, settings, paths, fold_idx, train_index,
     return features_matrix, selected_features, patients_ids, patients_files
 
 
-def select_features(features_df, settings, paths, fold_idx, train_index, pre_selected_features, drop_columns):
+def select_features(features_df, settings, paths, fold_idx, train_index, pre_selected_features, drop_columns, nlargest=25):
     method = settings.features_selection_method.lower()
     correlation_mode = settings.correlation_mode  # Default to 'multi'
 
@@ -202,12 +206,13 @@ def select_features(features_df, settings, paths, fold_idx, train_index, pre_sel
             return get_correlation_multi_event(features_df.reset_index(drop=True).loc[train_index].copy(),
                                                target_columns=settings.target_column,
                                                drop_columns=drop_columns,
-                                               paths=paths)
+                                               paths=paths, nlargest=nlargest)
         elif correlation_mode == 'single':
             return get_correlation_single_event(features_df.reset_index(drop=True).loc[train_index].copy(),
                                                 drop_columns=drop_columns,
                                                 single_event_target=settings.single_event_target,
-                                                paths=paths)
+                                                paths=paths,
+                                                nlargest=nlargest)
         else:
             raise ValueError("Invalid correlation mode")
     elif method == 'pre_selected':

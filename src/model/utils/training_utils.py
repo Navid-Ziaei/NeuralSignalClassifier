@@ -21,7 +21,7 @@ from src.utils import get_labels, get_correlation_single_event, get_drop_columns
 from src.visualization.visualization_utils import plot_metric_heatmaps
 
 
-def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_level_result=False):
+def train_model_with_folds(features_raw_df_dict, settings, paths, random_seed=42):
     """
     Train models using either k-fold cross-validation or a single train/test split for each patient's data.
 
@@ -32,21 +32,20 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
     4. Trains models specified in the settings on the training data for each fold or split.
     5. Evaluates the models on the test data and logs the results.
     6. Computes and saves average scores for each model across all folds (if in k-fold mode).
-    7. Optionally saves group-level results and overall results to CSV files.
 
     Args:
         settings (Settings): The settings object containing configurations.
         paths (Paths): The paths object containing file paths.
-        enable_group_level_result (bool): Whether to save group-level results. Defaults to False.
 
     Returns:
         None: The function saves results to CSV files and updates the results logger.
     """
     results_logger = ResultList(method_list=settings.method_list, metric_list=settings.metric_list)
-    all_patient_group_results = {method: [] for method in settings.method_list}
 
     for patient_id, (patient_file_name, features_raw_df) in enumerate(features_raw_df_dict.items()):
         print(f"====== Subject {patient_id} ({patient_file_name.split('.')[0]}) ====== \n")
+        if patient_file_name == 'p05_task1_block2_CLEAR_Flicker_flicker':
+            continue
 
         # Prepare data by removing specific columns
         columns_to_remove = [col for col in features_raw_df.columns if "EX" in col]
@@ -60,13 +59,13 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
 
         if settings.cross_validation_mode in ['k-fold', 'order']:
             # Generate k-folds for cross-validation
-            cv_mode = setup_cross_validation(settings.cross_validation_mode, num_folds=settings.num_fold)
+            cv_mode = setup_cross_validation(settings.cross_validation_mode, num_folds=settings.num_fold,
+                                             random_state=random_seed)
             folds = generate_folds(features_df, labels_array, cv_mode, n_splits=settings.num_fold)
         else:  # Single train/test split
             folds = [(train_test_split(np.arange(len(labels_array)), test_size=0.2, stratify=labels_array))]
 
         fold_results = {method: [] for method in settings.method_list}
-        fold_results_group = {method: [] for method in settings.method_list}
         fold_report_results = {method: [] for method in settings.method_list}
 
         for fold_idx, (train_index, test_index) in enumerate(folds):
@@ -75,7 +74,8 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
             # Select features and prepare the training and testing datasets
             features_matrix, selected_features, patients_ids, _ = get_selected_features(
                 features_df=features_df.copy(), settings=settings, paths=paths,
-                fold_idx=fold_idx, train_index=train_index, target_columns_drop=get_drop_columns(settings))
+                fold_idx=fold_idx, train_index=train_index, target_columns_drop=get_drop_columns(settings),
+                num_important_features=settings.num_important_features)
 
             data_train, data_test = features_matrix[train_index], features_matrix[test_index]
             labels_train, labels_test = labels_array[train_index], labels_array[test_index]
@@ -84,13 +84,18 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
             # Train and evaluate models for each specified method
             for method in settings.method_list:
                 print(f"=========== Train Subject {patient_id} Fold {fold_idx} Model {method} =========== \n")
-                results, group_result, report_results = train_model(method, data_train, labels_train, data_test,
-                                                                    labels_test, settings,
-                                                                    paths, y_train, y_test,
-                                                                    selected_features=selected_features,
-                                                                    target_columns=target_columns)
+                results, report_results = train_model(method,
+                                                      data_train=data_train,
+                                                      labels_train=labels_train,
+                                                      data_test=data_test,
+                                                      labels_test=labels_test,
+                                                      settings=settings,
+                                                      paths=paths,
+                                                      y_train=y_train,
+                                                      y_test=y_test,
+                                                      selected_features=selected_features,
+                                                      target_columns=target_columns)
                 fold_results[method].append(results)
-                fold_results_group[method].append(group_result)
                 fold_report_results[method].append(report_results)
 
             plt.close('all')
@@ -98,9 +103,13 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
         # Aggregate the results for fold reports
         aggregated_results = aggregate_fold_report_results(fold_report_results)
 
-        mean_grid_precision, _ = plot_metric_heatmaps(aggregated_results, metric='precision', grid_size=(10, 10), save_dir=paths.results_base_path)
-        mean_grid_recall, _ = plot_metric_heatmaps(aggregated_results, metric='recall', grid_size=(10, 10), save_dir=paths.results_base_path)
-        mean_grid_f1, _ = plot_metric_heatmaps(aggregated_results, metric='f1-score', grid_size=(10, 10), save_dir=paths.results_base_path)
+        if settings.dataset_task == 'm_sequence':
+            mean_grid_precision, _ = plot_metric_heatmaps(aggregated_results, metric='precision', grid_size=(10, 10),
+                                                          save_dir=paths.results_base_path)
+            mean_grid_recall, _ = plot_metric_heatmaps(aggregated_results, metric='recall', grid_size=(10, 10),
+                                                       save_dir=paths.results_base_path)
+            mean_grid_f1, _ = plot_metric_heatmaps(aggregated_results, metric='f1-score', grid_size=(10, 10),
+                                                   save_dir=paths.results_base_path)
 
         # Save or print the DataFrames
         for method, df in aggregated_results.items():
@@ -115,28 +124,16 @@ def train_model_with_folds(features_raw_df_dict, settings, paths, enable_group_l
                 results_logger.update_result(method, metric, avg_score, std_score)
                 print(f"Method {method}: {metric}: {avg_score} ± {std_score}")
 
-            # Save group-level results
-            # save_group_results(fold_results_group, method, paths.results_base_path)
-
-        # Update results across all patients
-        if enable_group_level_result:
-            all_patient_group_results.update(
-                {key: all_patient_group_results.get(key, []) + fold_results_group[key] for key in
-                 fold_results_group.keys()})
-
     # Save overall results to CSV
     result_df = results_logger.to_dataframe()
     result_df.to_csv(os.path.join(paths.base_path, paths.folder_name, f'{settings.cross_validation_mode}_results.csv'))
 
-    # Save group results for each method
-    if enable_group_level_result:
-        for key in all_patient_group_results.keys():
-            df_gp = pd.DataFrame(all_patient_group_results[key], index=settings.patient)
-            df_gp.to_csv(os.path.join(paths.base_path, paths.folder_name, f'group_results_{key}.csv'))
-
 
 def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_method='weighting',
               selected_features=None, target_columns=None):
+    save_path = paths.path_result + '/xgb/'
+    if os.path.exists(save_path) is False:
+        os.makedirs(save_path)
     # Create and train the XGBoost model with class weights
 
     if len(np.unique(labels_train)) > 2:
@@ -164,17 +161,16 @@ def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_m
 
     # Make predictions
     predictions = model.predict(data_test)
-    group_result = {}
-    for uvalue in np.unique(labels_test):
-        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
-        # use majority voting
-        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
 
-    report = classification_report(y_true=labels_test, y_pred=predictions, target_names=target_columns)
+    if len(target_columns) == 1:
+        target_names = [f'{target_columns[0]}_1', f'{target_columns[0]}_1']
+    else:
+        target_names = target_columns
+    report = classification_report(y_true=labels_test, y_pred=predictions, target_names=target_names)
     print(report)
 
     report_results = classification_report(y_true=labels_test, y_pred=predictions, output_dict=True,
-                                           target_names=target_columns)
+                                           target_names=target_names)
 
     metrics = {
         'accuracy': accuracy_score(labels_test, predictions),
@@ -183,28 +179,22 @@ def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_m
         'f1_score': f1_score(labels_test, predictions, average='weighted')
     }
 
-    with open(paths.path_result + 'xgb_classification_report.txt', "w") as file:
+    with open(save_path + 'xgb_classification_report.txt', "w") as file:
         file.write(report)
 
-    with open(paths.path_result + 'xgb_classification_result.json', "w") as file:
+    with open(save_path + 'xgb_classification_result.json', "w") as file:
         json.dump(metrics, file, indent=2)
 
-    return metrics, group_result, report_results
+    return metrics, report_results
 
 
 def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
                settings, paths):
-    model_settings = {'data_dim': data_train.shape[-1],
-                      'latent_dim': settings.latent_dim,
-                      'num_inducing_points': settings.num_inducing_points,
-                      'cls_weight': settings.cls_weight,
-                      'reg_weight': 1.0,
-                      'use_gpytorch': settings.use_gpytorch,
-                      'use_shared_kernel': False,
-                      'shared_inducing_points': settings.shared_inducing_points,
-                      'early_stop': None,
-                      'load_trained_model': False}
-
+    save_path = paths.path_result + '/ldgd/'
+    if os.path.exists(save_path) is False:
+        os.makedirs(save_path)
+    model_settings = settings.ldgd_configs
+    model_settings['data_dim'] = data_train.shape[-1]
     batch_shape = torch.Size([model_settings['data_dim']])
 
     likelihood_reg = GaussianLikelihood(batch_shape=batch_shape)
@@ -243,8 +233,8 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
                                                              epochs=settings.num_epochs_train,
                                                              batch_size=settings.batch_size,
                                                              save_best_result=True,
-                                                             path_save=paths.path_model)
-        model.load_weights(paths.path_model)
+                                                             path_save=save_path)
+        model.load_weights(save_path)
         # model.save_wights(path_save=paths.path_model)
 
         num_figures = len(loss_dict)
@@ -257,26 +247,22 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
             axs[i].set_xlabel('Epoch')
             axs[i].set_ylabel(key)
         plt.tight_layout()
-        plt.savefig(paths.path_result + 'losses_train_ldgd.png')
-        plt.savefig(paths.path_result + 'losses_train_ldgd.svg')
+        plt.savefig(save_path + 'losses_train_ldgd.png')
+        plt.savefig(save_path + 'losses_train_ldgd.svg')
         plt.cla()
         plt.close()
         #plt.show()
 
-        with open(paths.path_model + 'model_settings_ldgd.json', 'w') as f:
+        with open(save_path + 'model_settings_ldgd.json', 'w') as f:
             json.dump(model_settings, f, indent=2)
     else:
         losses = []
-        model.load_weights(paths.path_model)
+        model.load_weights(save_path)
 
     predictions, metrics, history_test, loss_terms_test, report_results = model.evaluate(yn_test=data_test,
                                                                                          ys_test=labels_test,
                                                                                          epochs=settings.num_epochs_test,
-                                                                                         save_path=paths.path_result)
-    group_result = {}
-    for uvalue in np.unique(labels_test):
-        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
-        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
+                                                                                         save_path=save_path)
 
     with open(paths.path_result + 'ldgd_classification_result.json', "w") as file:
         json.dump(metrics, file, indent=2)
@@ -288,8 +274,8 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
         axs[i].set_xlabel('Epoch')
         axs[i].set_ylabel(key)
     plt.tight_layout()
-    plt.savefig(paths.path_result + 'losses_test_ldgd.png')
-    plt.savefig(paths.path_result + 'losses_test_ldgd.svg')
+    plt.savefig(save_path + 'losses_test_ldgd.png')
+    plt.savefig(save_path + 'losses_test_ldgd.svg')
     #plt.show()
     plt.cla()
     plt.close()
@@ -305,16 +291,16 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
         X = model.x.q_mu.detach().cpu().numpy()
         std = torch.nn.functional.softplus(model.x.q_log_sigma).cpu().detach().numpy()
 
-    visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=np.squeeze(labels_train), losses=losses,
                                      inverse_length_scale=alpha_reg,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result,
+                                     save_path=save_path,
                                      file_name=f'gplvm_train_reg_result_all_ldgd',
                                      show_errorbars=True)
-    visualization.plot_results_gplvm(X, np.sqrt(std), labels=labels_train, losses=losses,
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=np.squeeze(labels_train), losses=losses,
                                      inverse_length_scale=alpha_cls,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result,
+                                     save_path=save_path,
                                      file_name=f'gplvm_train_cls_result_all_ldgd',
                                      show_errorbars=True)
 
@@ -328,56 +314,58 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     # plot the heatmap of the latent space
     inducing_points = (history_test['z_list_reg'][-1], history_test['z_list_cls'][-1])
 
-    visualization.plot_heatmap(X, labels_train, model, alpha_cls, cmap='binary', range_scale=1.2,
+    visualization.plot_heatmap(X, np.squeeze(labels_train), model, alpha_cls, cmap='binary', range_scale=1.2,
                                file_name='latent_heatmap_train_ldgd', inducing_points=inducing_points,
-                               save_path=paths.path_result,
+                               save_path=save_path,
                                device=device,
-                               heat_map_mode='std', show_legend=False)
+                               heat_map_mode='prob', show_legend=False)
 
-    visualization.plot_heatmap(X_test, labels_test, model, alpha_cls, cmap='binary', range_scale=1.2,
+    visualization.plot_heatmap(X_test, np.squeeze(labels_test), model, alpha_cls, cmap='binary', range_scale=1.2,
                                file_name='latent_heatmap_test_ldgd', inducing_points=inducing_points,
-                               save_path=paths.path_result,
+                               save_path=save_path,
                                device=device,
-                               heat_map_mode='std', show_legend=False)
+                               heat_map_mode='prob', show_legend=False)
 
     visualization.animate_train(point_history=history_train['x_mu_list'],
-                                labels=labels_train,
+                                labels=np.squeeze(labels_train),
                                 file_name='train_animation_with_inducing_ldgd',
-                                save_path=paths.path_result,
+                                save_path=save_path,
                                 inverse_length_scale=alpha_cls,
                                 inducing_points_history=(history_train['z_list_reg'], history_train['z_list_cls']))
 
     visualization.animate_train(point_history=history_test['x_mu_list'],
-                                labels=labels_test,
+                                labels=np.squeeze(labels_test),
                                 file_name='test_animation_with_inducing_ldgd',
-                                save_path=paths.path_result,
+                                save_path=save_path,
                                 inverse_length_scale=alpha_cls,
                                 inducing_points_history=(history_test['z_list_reg'], history_test['z_list_cls']))
 
-    visualization.plot_results_gplvm(X_test, std_test, labels=labels_test, losses=losses,
+    visualization.plot_results_gplvm(X_test, std_test, labels=np.squeeze(labels_test), losses=losses,
                                      inverse_length_scale=alpha_cls,
                                      latent_dim=model_settings['latent_dim'],
-                                     save_path=paths.path_result, file_name=f'gplvm_test_result_all_ldgd',
+                                     save_path=save_path, file_name=f'gplvm_test_result_all_ldgd',
                                      show_errorbars=True)
 
     """
     inducing_points = (history_test['z_list_reg'][-1], history_test['z_list_cls'][-1])
 
     plot_heatmap(X, labels_train, model, alpha_cls, cmap='winter', range_scale=1.2,
-                 file_name='latent_heatmap_train', inducing_points=inducing_points, save_path=paths.path_result[0])
+                 file_name='latent_heatmap_train', inducing_points=inducing_points, save_path=save_path[0])
     plot_heatmap(X_test, labels_test, model, alpha_cls, cmap='winter', range_scale=1.2,
-                 file_name='latent_heatmap_test', inducing_points=inducing_points, save_path=paths.path_result[0])
+                 file_name='latent_heatmap_test', inducing_points=inducing_points, save_path=save_path[0])
     """
 
-    return metrics, group_result, report_results
+    return metrics, report_results
 
 
 def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test,
                     settings, paths, use_validation=True):
-    model_settings = {'data_dim': data_train.shape[-1], 'latent_dim': 10,
-                      'num_inducing_points': settings.num_inducing_points, 'cls_weight': settings.cls_weight,
-                      'reg_weight': 1.0, 'use_gpytorch': settings.use_gpytorch, 'use_shared_kernel': False,
-                      'shared_inducing_points': False, 'early_stop': None}
+    save_path = paths.path_result + '/fast_ldgd/'
+    if os.path.exists(save_path) is False:
+        os.makedirs(save_path)
+    model_settings = settings.fast_ldgd_configs
+    model_settings['data_dim'] = data_train.shape[-1]
+
     batch_shape = torch.Size([model_settings['data_dim']])
 
     likelihood_reg = GaussianLikelihood(batch_shape=batch_shape)
@@ -400,13 +388,11 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
     hidden_dim1 = 100
     hidden_dim2 = 50
     encoder = nn.Sequential(
-        nn.LazyLinear(300),
+        nn.LazyLinear(50),
         nn.ReLU(),
         nn.LazyLinear(hidden_dim1),
         nn.ReLU(),
         nn.LazyLinear(hidden_dim1),
-        nn.ReLU(),
-        nn.LazyLinear(hidden_dim2),
         nn.ReLU()
     )
 
@@ -441,13 +427,13 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
     if settings.load_trained_model is False:
         # spilit train to train and validation using 90% for training and 10% for validation skleren train_test_split
 
-        losses, loss_dict, *_ = model.train_model(yn=data_train, ys=y_train_onehot,
-                                                  epochs=settings.num_epochs_train,
-                                                  batch_size=settings.batch_size,
-                                                  yn_test=data_val,
-                                                  ys_test=labels_val,
-                                                  save_best_result=True,
-                                                  path_save=paths.path_model)
+        losses, loss_dict, history_train = model.train_model(yn=data_train, ys=y_train_onehot,
+                                                             epochs=settings.num_epochs_train,
+                                                             batch_size=settings.batch_size,
+                                                             yn_test=data_val,
+                                                             ys_test=labels_val,
+                                                             save_best_result=True,
+                                                             path_save=paths.path_model)
         model.load_weights(paths.path_model)
         num_figures = len(loss_dict)
 
@@ -462,76 +448,87 @@ def train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y
             axs[i].set_ylabel(key)
             axs[i].axvline(x=max_test_loss_arg, color='r', linestyle='--')
         plt.tight_layout()
-        plt.savefig(paths.path_result + 'losses_fast_ldgd.png')
-        plt.savefig(paths.path_result + 'losses_fast_ldgd.svg')
+        plt.savefig(save_path + 'losses_fast_ldgd.png')
+        plt.savefig(save_path + 'losses_fast_ldgd.svg')
         # plt.show()
         plt.close()
         plt.cla()
         # early_stop=early_stop)
-        model.save_wights(path_save=paths.path_model)
+        model.save_wights(path_save=save_path)
 
-        with open(paths.path_model + 'model_settings_fast_ldgd.json', 'w') as f:
+        with open(save_path + 'model_settings_fast_ldgd.json', 'w') as f:
             json.dump(model_settings, f, indent=2)
     else:
         losses = []
-        model.load_weights(paths.path_model)
+        model.load_weights(save_path)
 
-    predictions, metrics, *_, report_results = model.evaluate(yn_test=data_test, ys_test=labels_test,
+    predictions, metrics, history_test, *_, report_results = model.evaluate(yn_test=data_test, ys_test=labels_test,
                                                               epochs=settings.num_epochs_test,
-                                                              save_path=paths.path_result)
+                                                              save_path=save_path)
 
-    group_result = {}
-    for uvalue in np.unique(labels_test):
-        print(f"Class {uvalue} has {np.sum(labels_test == uvalue)} samples")
-        group_result[uvalue] = np.mean(predictions[labels_test == uvalue])
-
-    with open(paths.path_result + 'fast_ldgd_classification_result.json', "w") as file:
+    with open(save_path + 'fast_ldgd_classification_result.json', "w") as file:
         json.dump(metrics, file, indent=2)
 
-    return metrics, group_result
+    ########################
+    if model_settings['use_gpytorch'] is False:
+        alpha_reg = model.kernel_reg.alpha.detach().numpy()
+        alpha_cls = model.kernel_cls.alpha.detach().numpy()
+        X, std = model.x.encode(data_train.to(device))
+    else:
+        alpha_reg = 1 / model.kernel_reg.base_kernel.lengthscale.cpu().detach().numpy()
+        alpha_cls = 1 / model.kernel_cls.base_kernel.lengthscale.cpu().detach().numpy()
+        X, std = model.x.encode(data_train.to(device))
+    X = X.cpu().detach().numpy()
+    std = std.cpu().detach().numpy()
 
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=np.squeeze(labels_train), losses=losses,
+                                     inverse_length_scale=alpha_reg,
+                                     latent_dim=model_settings['latent_dim'],
+                                     save_path=save_path,
+                                     file_name=f'gplvm_train_reg_result_all_ldgd',
+                                     show_errorbars=True)
+    visualization.plot_results_gplvm(X, np.sqrt(std), labels=np.squeeze(labels_train), losses=losses,
+                                     inverse_length_scale=alpha_cls,
+                                     latent_dim=model_settings['latent_dim'],
+                                     save_path=save_path,
+                                     file_name=f'gplvm_train_cls_result_all_ldgd',
+                                     show_errorbars=True)
 
-def save_group_results(fold_results_group, method, results_base_path):
-    """
-    Calculate and save group-level metrics based on the results from k-fold cross-validation.
+    X_test, std_test = model.x.encode(data_test.to(device))
+    X_test = X_test.cpu().detach().numpy()
+    std_test = std_test.cpu().detach().numpy()
 
-    This function aggregates the true values and predictions across all folds for a specific
-    method, calculates several evaluation metrics (accuracy, precision, recall, F1 score, and AUC),
-    and saves these metrics to a text file.
+    # plot the heatmap of the latent space
+    inducing_points = (history_train['z_list_reg'][-1], history_train['z_list_cls'][-1])
+    history_test = model.history_test
 
-    Args:
-        fold_results_group (dict): A dictionary containing the group results for each method,
-                                   where the keys are method names and the values are lists of
-                                   dictionaries with true and predicted values.
-        method (str): The name of the method for which to calculate and save the metrics.
-        results_base_path (str): The base directory where the results file should be saved.
+    visualization.plot_heatmap(X, np.squeeze(labels_train), model, alpha_cls, cmap='binary', range_scale=1.2,
+                               file_name='latent_heatmap_train_ldgd', inducing_points=inducing_points,
+                               save_path=save_path,
+                               device=device,
+                               heat_map_mode='prob', show_legend=False)
 
-    Returns:
-        None: The function saves the calculated metrics to a text file and does not return any value.
-    """
-    true_values, predictions = [], []
+    visualization.plot_heatmap(X_test, np.squeeze(labels_test), model, alpha_cls, cmap='binary', range_scale=1.2,
+                               file_name='latent_heatmap_test_ldgd', inducing_points=inducing_points,
+                               save_path=save_path,
+                               device=device,
+                               heat_map_mode='prob', show_legend=False)
 
-    # Aggregate true values and predictions from all folds
-    for gp_result in fold_results_group[method]:
-        for true_value, predicted_value in gp_result.items():
-            true_values.append(true_value)
-            predictions.append(predicted_value)
+    visualization.animate_train(point_history=history_train['x_mu_list'],
+                                labels=np.squeeze(labels_train),
+                                file_name='train_animation_with_inducing_ldgd',
+                                save_path=save_path,
+                                inverse_length_scale=alpha_cls,
+                                inducing_points_history=(history_train['z_list_reg'], history_train['z_list_cls']))
 
-    # Convert lists to numpy arrays
-    true_values, predictions = np.array(true_values), np.array(predictions)
+    visualization.animate_train(point_history=history_test['x_mu_list'],
+                                labels=np.squeeze(labels_val),
+                                file_name='test_animation_with_inducing_ldgd',
+                                save_path=save_path,
+                                inverse_length_scale=alpha_cls,
+                                inducing_points_history=(history_test['z_list_reg'], history_test['z_list_cls']))
 
-    # Calculate group-level metrics
-    group_result = {
-        'accuracy': accuracy_score(true_values, predictions.round()),
-        'precision': precision_score(true_values, predictions.round(), average='binary'),
-        'recall': recall_score(true_values, predictions.round(), average='binary'),
-        'f1': f1_score(true_values, predictions.round(), average='binary'),
-        'auc': roc_auc_score(true_values, predictions)
-    }
-
-    # Save the metrics to a text file
-    with open(os.path.join(results_base_path, f'group_results_{method}.txt'), 'w') as f:
-        f.write(str(group_result))
+    return metrics, report_results
 
 
 def setup_cross_validation(cv_mode, num_folds=5, random_state=42):
@@ -571,7 +568,7 @@ def train_model(method, data_train, labels_train, data_test, labels_test, settin
         return train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test, settings, paths)
     elif method.lower() == 'fast_ldgd':
         return train_fast_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test, settings, paths,
-                               use_validation=True)
+                               use_validation=False)
     else:
         raise ValueError("Method should be 'xgboost', 'ldgd', or 'fast_ldgd'")
 
@@ -601,8 +598,9 @@ def aggregate_fold_report_results(fold_report_results):
         # Collect data across all folds
         for report in reports:
             for target, values in report.items():
-                for metric in metrics:
-                    aggregated_data[target][metric].append(values[metric])
+                if target not in ['accuracy']:
+                    for metric in metrics:
+                        aggregated_data[target][metric].append(values[metric])
 
         # Calculate mean and std for each metric
         result_dict = {}

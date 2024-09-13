@@ -6,21 +6,21 @@ debug_mode: true
 
 ## ========================= Dataset ===============================
 patient:
-  - 'p13'
+  - 'p05'
 
 
 dataset: "clear" # Dataset name to use : "pilot01" "clear"
-dataset_task: "m_sequence" # "flicker" or "m_sequence"
-single_event_target: "target_9_8"
+dataset_task: "flicker" # "flicker" or "m_sequence"
+single_event_target: "ColorLev"# "target_9_8"
 
 # Preprocessing
 preprocessing_configs: {} #{'low_pass_filter': {'cutoff': 45, 'order': 5}}
-load_preprocessed_data: true # Load preprocessed data from a file
-save_preprocessed_data: true # Save preprocessed data to a file
+load_preprocessed_data: false # Load preprocessed data from a file
+save_preprocessed_data: false # Save preprocessed data to a file
 
 # Feature extraction
-save_features: true
-load_features: false
+save_features: false
+load_features: true
 feature_extraction_configs : {
         'time_n200': {'start_time': 150, 'end_time': 250},
         'time_p300': {'start_time': 250, 'end_time': 550},
@@ -31,12 +31,13 @@ feature_extraction_configs : {
 feature_transformation : "normalize"  # Options: normalize, standardize, None
 
 # Feature selection
-features_selection_method : "all"  # Options: all, corr, pre_selected
-correlation_mode: "multi" # correlation based on single event or multi event Options: 'multi' or 'single'
+features_selection_method : "corr"  # Options: all, corr, pre_selected
+num_important_features: 100
+correlation_mode: "single" # correlation based on single event or multi event Options: 'multi' or 'single'
 
 
 # =========================== Training ===================================
-cross_validation_mode: 'order'  # Options: 'single', 'order', 'kfold'
+cross_validation_mode: 'k-fold'  # Options: 'single', 'order', 'k-fold'
 num_folds: 5
 test_size: 0.2
 load_pretrained_model: true # Load a pretrained model
@@ -45,8 +46,8 @@ load_pretrained_model: true # Load a pretrained model
 
 method_list:
   - "xgboost"
-#  - "fast_ldgd"
-#  - "ldgd"
+  #- "ldgd"
+  - "fast_ldgd"
 
 metric_list:
   - "accuracy"
@@ -54,17 +55,32 @@ metric_list:
   - "precision"
   - "recall"
 
+# Fast LDGD Configs
+fast_ldgd_configs : {'latent_dim': 3,
+                    'num_inducing_points': 10,
+                    'cls_weight': 1.0,
+                    'reg_weight': 1.0,
+                    'use_gpytorch': True,
+                    'use_shared_kernel': False,
+                    'shared_inducing_points': True,
+                    'early_stop': None,
+                    'encoder': [300, 100]}
 # LDGD Configs
-data_dim : None
-latent_dim : 3
-num_inducing_points : 10
-cls_weight : 1
-use_gpytorch : True
-shared_inducing_points : True
+ldgd_configs : {'latent_dim': 2,
+                    'num_inducing_points': 5,
+                    'cls_weight': 1.0,
+                    'reg_weight': 1.0,
+                    'use_gpytorch': True,
+                    'use_shared_kernel': False,
+                    'shared_inducing_points': True,
+                    'early_stop': None}
+# XGBoost Configs
+xgboost_configs : {'balance_method': 'weighting'
+}
 
 # Training LDGD
 load_trained_model : False
 batch_size : 100
-num_epochs_train : 5000
-num_epochs_test : 5000
+num_epochs_train : 1000
+num_epochs_test : 1500
 

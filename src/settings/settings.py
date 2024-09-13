@@ -56,6 +56,11 @@ class Settings:
         self.single_event_target = "target_0_0"
         self.num_folds = 5
 
+        self.fast_ldgd_configs = {}
+        self.ldgd_configs = {}
+        self.xgboost_configs = {}
+        self.num_important_features = 25
+
     def load_settings(self):
         """
         This function loads the YAML files for settings and network settings from the working directory and
@@ -111,7 +116,7 @@ class Settings:
             self.target_column = [f"target_{i}_{j}" for i in range(10) for j in range(10)]
             self.__dataset_task = value
         elif value == 'flicker':
-            self.target_column = 'ColorLev'
+            self.target_column = ['ColorLev']
             self.__dataset_task = value
         elif value is None:
             print("No task is selected (necessary for clear dataset)")

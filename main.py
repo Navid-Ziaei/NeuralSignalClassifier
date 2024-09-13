@@ -1,4 +1,5 @@
 import os
+import random
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from src.settings import Paths, Settings
@@ -8,6 +9,10 @@ from src.data_preprocess import DataPreprocessor
 from src.utils import *
 from src.model.utils.training_utils import *
 
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
+random.seed(RANDOM_SEED)
+torch.manual_seed(RANDOM_SEED)
 
 def main():
     # Load settings from settings.json
@@ -23,7 +28,7 @@ def main():
     features_raw_df_dict = load_or_extract_features(settings, paths)
 
     # Perform training with cross-validation or single fold
-    train_model_with_folds(features_raw_df_dict, settings, paths)
+    train_model_with_folds(features_raw_df_dict, settings, paths, RANDOM_SEED)
 
 
 def load_or_extract_features(settings, paths):
