@@ -17,9 +17,9 @@ class ResultList():
         self.result_list[method + ' avg_' + metric].append(avg)
         self.result_list[method + ' std_' + metric].append(std)
 
-    def add_subject(self, unique_pids, patients_files):
+    def add_subject(self, unique_pids, patients_files, params=''):
         self.result_list['subject id'].append(unique_pids)
-        self.result_list['filename'].append('_'.join(patients_files.split('.')[:-1]))
+        self.result_list['filename'].append('_'.join(patients_files.split('.')[:-1])+params)
 
     def update_result(self, method, metric, avg_score, std_score):
         self.result_list[method + ' avg_' + metric].append(avg_score)

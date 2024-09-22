@@ -1,5 +1,72 @@
 import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV
+import os
+from sklearn.metrics import f1_score, classification_report, accuracy_score, precision_score, recall_score
+import numpy as np
+import xgboost as xgb
+
+import json
+from imblearn.over_sampling import SMOTE
+
+
+
+def train_xgb(data_train, labels_train, data_test, labels_test, paths, balance_method='weighting',
+              selected_features=None, target_columns=None):
+    save_path = paths.path_result + '/xgb/'
+    if os.path.exists(save_path) is False:
+        os.makedirs(save_path)
+    # Create and train the XGBoost model with class weights
+
+    if len(np.unique(labels_train)) > 2:
+        model = xgb.XGBClassifier(objective="multi:softmax", num_class=2)
+    else:
+        scale_pos_weight = 1
+        if balance_method == 'smote':
+            smote = SMOTE(random_state=42)
+            data_train, labels_train = smote.fit_resample(data_train, labels_train)
+        elif balance_method == 'weighting':
+            scale_pos_weight = 2 * np.sum(1 - labels_train) / np.sum(labels_train)
+
+        model = xgb.XGBClassifier(scale_pos_weight=scale_pos_weight,
+                                  max_depth=6,
+                                  num_parallel_tree=2)
+
+    model.fit(data_train, labels_train)
+    if selected_features is not None:
+        key_list = list(selected_features.keys())
+        feature_list = selected_features[key_list[0]]
+        feature_importance = {feature_list[i]: model.feature_importances_[i] for i in
+                              range(len(feature_list))}
+        print("top 10 important features are: ",
+              sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10])
+
+    # Make predictions
+    predictions = model.predict(data_test)
+
+    if len(target_columns) == 1:
+        target_names = [f'{target_columns[0]}_1', f'{target_columns[0]}_1']
+    else:
+        target_names = target_columns
+    report = classification_report(y_true=labels_test, y_pred=predictions, target_names=target_names)
+    print(report)
+
+    report_results = classification_report(y_true=labels_test, y_pred=predictions, output_dict=True,
+                                           target_names=target_names)
+
+    metrics = {
+        'accuracy': accuracy_score(labels_test, predictions),
+        'precision': precision_score(labels_test, predictions, average='weighted'),
+        'recall': recall_score(labels_test, predictions, average='weighted'),
+        'f1_score': f1_score(labels_test, predictions, average='weighted')
+    }
+
+    with open(save_path + 'xgb_classification_report.txt', "w") as file:
+        file.write(report)
+
+    with open(save_path + 'xgb_classification_result.json', "w") as file:
+        json.dump(metrics, file, indent=2)
+
+    return metrics, report_results
 
 
 def optimize_xgboost_hyperparameters(X, y):

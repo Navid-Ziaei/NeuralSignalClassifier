@@ -46,8 +46,8 @@ load_pretrained_model: true # Load a pretrained model
 
 method_list:
   - "xgboost"
-  #- "ldgd"
-  - "fast_ldgd"
+  - "ldgd"
+  # - "fast_ldgd"
 
 metric_list:
   - "accuracy"
@@ -66,7 +66,7 @@ fast_ldgd_configs : {'latent_dim': 3,
                     'early_stop': None,
                     'encoder': [300, 100]}
 # LDGD Configs
-ldgd_configs : {'latent_dim': 2,
+ldgd_configs : {'latent_dim': 1,
                     'num_inducing_points': 5,
                     'cls_weight': 1.0,
                     'reg_weight': 1.0,
@@ -81,6 +81,6 @@ xgboost_configs : {'balance_method': 'weighting'
 # Training LDGD
 load_trained_model : False
 batch_size : 100
-num_epochs_train : 1000
-num_epochs_test : 1500
+num_epochs_train : 1500
+num_epochs_test : 4000
 
