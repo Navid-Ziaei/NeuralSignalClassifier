@@ -16,6 +16,7 @@ def train_ldgd(data_train, labels_train, data_test, labels_test, y_train, y_test
     save_path = paths.path_result + '/ldgd/'
     if os.path.exists(save_path) is False:
         os.makedirs(save_path)
+
     model_settings = settings.ldgd_configs
     model_settings['data_dim'] = data_train.shape[-1]
     batch_shape = torch.Size([model_settings['data_dim']])

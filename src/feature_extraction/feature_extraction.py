@@ -101,16 +101,16 @@ class FeatureExtractor:
                 # Store the extracted features
                 self.all_patient_features[patient_id] = features
 
-                # Save the features to a file for future use
-                if self.settings.load_features is True:
-                    self.save_features(features, feature_file)
                 logging.info("Successfully Extracted!")
                 features_df = self.feature_dict_to_df(eeg_dataset,
                                                       feature_dict=features,
                                                       patient_id=index,
                                                       patient_file_name=patient_id)
+
+                # Save the features to a file for future use
                 if self.settings.save_features is True:
                     features_df.to_csv(feature_file)
+                    # self.save_features(features, feature_file)
 
                 features_all_blocks[patient_id] = features_df
 
@@ -126,8 +126,8 @@ class FeatureExtractor:
         features_df = pd.DataFrame(features_matrix, columns=features_list_name)
 
         # Create the patient ID and patient name columns as separate DataFrames
-        patients_ids_df = pd.DataFrame({'id': patient_id*np.ones(features_matrix.shape[0])})
-        train_patient_name_df = pd.DataFrame({'subject_file': features_matrix.shape[0]*[patient_file_name]})
+        patients_ids_df = pd.DataFrame({'id': patient_id * np.ones(features_matrix.shape[0])})
+        train_patient_name_df = pd.DataFrame({'subject_file': features_matrix.shape[0] * [patient_file_name]})
 
         # Concatenate all columns (features, patient IDs, and patient names) at once
         features_df = pd.concat([patients_ids_df, train_patient_name_df, features_df], axis=1)

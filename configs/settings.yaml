@@ -2,11 +2,19 @@
 # pilot1: '101' '103' '106' '107' '110' '111' '112' '113' '114' '115' '116' '201' '204' '205'
 # CLEAR: 'p01' ... 'p18'
 # Enable or disable debug mode
-debug_mode: true
+debug_mode: false
 
 ## ========================= Dataset ===============================
 patient:
+  - 'p01'
+  - 'p02'
+  - 'p03'
+  - 'p04'
   - 'p05'
+  - 'p06'
+  - 'p07'
+  - 'p08'
+  - 'p13'
 
 
 dataset: "clear" # Dataset name to use : "pilot01" "clear"
@@ -19,7 +27,7 @@ load_preprocessed_data: false # Load preprocessed data from a file
 save_preprocessed_data: false # Save preprocessed data to a file
 
 # Feature extraction
-save_features: false
+save_features: true
 load_features: true
 feature_extraction_configs : {
         'time_n200': {'start_time': 150, 'end_time': 250},
@@ -46,8 +54,8 @@ load_pretrained_model: true # Load a pretrained model
 
 method_list:
   - "xgboost"
-  - "ldgd"
-  # - "fast_ldgd"
+  #- "ldgd"
+  - "fast_ldgd"
 
 metric_list:
   - "accuracy"
@@ -56,8 +64,8 @@ metric_list:
   - "recall"
 
 # Fast LDGD Configs
-fast_ldgd_configs : {'latent_dim': 3,
-                    'num_inducing_points': 10,
+fast_ldgd_configs : {'latent_dim': 2,
+                    'num_inducing_points': 2,
                     'cls_weight': 1.0,
                     'reg_weight': 1.0,
                     'use_gpytorch': True,
@@ -67,7 +75,7 @@ fast_ldgd_configs : {'latent_dim': 3,
                     'encoder': [300, 100]}
 # LDGD Configs
 ldgd_configs : {'latent_dim': 1,
-                    'num_inducing_points': 5,
+                    'num_inducing_points': 2,
                     'cls_weight': 1.0,
                     'reg_weight': 1.0,
                     'use_gpytorch': True,
@@ -81,6 +89,6 @@ xgboost_configs : {'balance_method': 'weighting'
 # Training LDGD
 load_trained_model : False
 batch_size : 100
-num_epochs_train : 1500
+num_epochs_train : 1000
 num_epochs_test : 4000
 
