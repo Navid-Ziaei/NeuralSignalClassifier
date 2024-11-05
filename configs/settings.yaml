@@ -18,8 +18,8 @@ patient:
 
 
 dataset: "clear" # Dataset name to use : "pilot01" "clear"
-dataset_task: "flicker" # "flicker" or "m_sequence"
-single_event_target: "ColorLev"# "target_9_8"
+dataset_task: "m_sequence" # "flicker" or "m_sequence"
+single_event_target: "target_9_8"# "target_9_8" ColorLev
 
 # Preprocessing
 preprocessing_configs: {} #{'low_pass_filter': {'cutoff': 45, 'order': 5}}

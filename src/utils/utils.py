@@ -70,6 +70,82 @@ def get_labels_clear(features_df, settings):
             labels_array = features_df[settings.single_event_target].values
         else:
             labels_array = features_df[target_columns].values
+
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from matplotlib import animation
+            import imageio
+
+            data = labels_array.reshape(-1, 10, 10)
+
+            # Define the function to animate each frame
+            def update_frame(frame):
+                plt.clf()  # Clear the current frame
+                fig.patch.set_facecolor('gray')
+                plt.imshow(data[frame], cmap='gray', vmin=0, vmax=1)  # Show black and white image
+                plt.axis('off')  # Hide axes for a clean image
+
+                # Draw a small red '+' at the center of the pixel (row 4, col 5)
+                plt.plot([5], [4], 'r+', markersize=15, markeredgewidth=4)  # Row 4, Column 5
+
+                #plt.gca().set_aspect('equal', adjustable='box')
+                plt.tight_layout()
+            # Set up the figure
+            fig = plt.figure(figsize=(5, 5), facecolor='gray')
+
+            # Create the animation
+            ani = animation.FuncAnimation(fig, update_frame, frames=100, interval=800)  # 800ms per frame
+
+            # Save the animation as MP4
+            #ani.save('animation_with_red_cross.mp4', writer='ffmpeg')
+
+            # Optionally save as GIF (if needed)
+            ani.save('animation_with_red_cross.gif', writer='imagemagick')
+
+            # Show the plot (optional)
+            plt.show()
+
+            import pandas as pd
+            import matplotlib.pyplot as plt
+
+            # Data extracted from the image provided by the user
+            years = [
+                2014, 2015, 2020, 2020, 2020, 2021, 2022, 2017, 2017, 2019,
+                2017, 2018, 2018, 2020, 2020, 2021, 2022, 2008, 2014, 2018,
+                2018, 2018, 2018, 2018, 2020, 2020, 2021, 2021, 2023, 2024,
+                2024, 2006, 1999, 2008, 2009, 2014, 2016, 2018, 2020, 2019, 2022, 2022
+            ]
+
+            # Create a dataframe for the data
+            df = pd.DataFrame(years, columns=['Year'])
+
+            # Create the histogram
+            plt.figure(figsize=(16, 6), dpi=300)
+            plt.hist(df['Year'], bins=range(1999, 2025), edgecolor='gray', color='darkblue')
+
+            # Add titles and labels
+            plt.title('Number of Papers Published per Year (2000-2024)', fontsize=16)
+            plt.xlabel('Year', fontsize=14)
+            plt.ylabel('Number of Papers', fontsize=14)
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+            # Rotate the x-axis labels and adjust font size
+            plt.xticks(range(2000, 2025), rotation=45, ha='right', fontsize=12)
+
+            # Customize the axis for a cleaner presentation
+            plt.gca().spines['top'].set_visible(False)
+            plt.gca().spines['right'].set_visible(False)
+            plt.gca().spines['left'].set_linewidth(1.2)
+            plt.gca().spines['bottom'].set_linewidth(1.2)
+
+            # Increase the thickness of the ticks
+            plt.tick_params(axis='both', which='major', width=1.2, length=6)
+
+            # Display the histogram
+            plt.tight_layout()
+            plt.show()
+
+
     else:
         raise ValueError(f"Undefined task: {settings.dataset_task}")
 
